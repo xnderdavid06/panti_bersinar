@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, HeartHandshake, CheckCircle2, Building2, User, Mail, Phone, GraduationCap, Calendar, MessageSquare, ArrowRight, Sparkles } from 'lucide-react';
 import { PANTI_BRANCHES, VOLUNTEER_ROLES } from '../data/mockData';
 import { VolunteerApplication } from '../types';
@@ -26,6 +26,17 @@ export const VolunteerModal: React.FC<VolunteerModalProps> = ({
   const [motivation, setMotivation] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [applicationId, setApplicationId] = useState('');
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

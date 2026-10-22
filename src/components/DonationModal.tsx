@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Heart, ShieldCheck, Copy, Check, QrCode, ArrowRight, Download, CreditCard, Building, Sparkles } from 'lucide-react';
 import { DONATION_PROGRAMS, BANK_ACCOUNTS, FOUNDATION_INFO } from '../data/mockData';
 import { DonationRecord } from '../types';
@@ -32,6 +32,17 @@ export const DonationModal: React.FC<DonationModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [receipt, setReceipt] = useState<DonationRecord | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

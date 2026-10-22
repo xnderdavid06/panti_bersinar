@@ -103,12 +103,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onUpdateWhatsAppPledges,
 }) => {
   // Authentication State
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [usernameInput, setUsernameInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('admin_auth') === 'true';
+  });
+  const [usernameInput, setUsernameInput] = useState('h15250042@john.petra.ac.id');
+  const [passwordInput, setPasswordInput] = useState('Reinard05.');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => {
+    return localStorage.getItem('admin_email') || (localStorage.getItem('admin_auth') === 'true' ? 'h15250042@john.petra.ac.id' : null);
+  });
 
   // Tabs matching Screenshot:
   // Facilities | Activities | Volunteers | Donations | Homes | Visits | Old WhatsApp pledges
@@ -151,7 +155,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setIsAuthenticated(true);
-        setCurrentUserEmail(session.user.email || 'h15250042@john.petra.ac.id');
+        const email = session.user.email || 'h15250042@john.petra.ac.id';
+        setCurrentUserEmail(email);
+        localStorage.setItem('admin_auth', 'true');
+        localStorage.setItem('admin_email', email);
       }
     });
 
@@ -160,7 +167,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setIsAuthenticated(true);
-        setCurrentUserEmail(session.user.email || 'h15250042@john.petra.ac.id');
+        const email = session.user.email || 'h15250042@john.petra.ac.id';
+        setCurrentUserEmail(email);
+        localStorage.setItem('admin_auth', 'true');
+        localStorage.setItem('admin_email', email);
       }
     });
 
@@ -168,6 +178,17 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       subscription.unsubscribe();
     };
   }, []);
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -187,26 +208,27 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       (email.toLowerCase() === 'admin@rumahbersinar.org' && pass === 'admin123') ||
       (email.toLowerCase() === 'admin' && pass === 'admin123')
     ) {
+      const activeEmail = email.toLowerCase() === 'admin' ? 'admin@rumahbersinar.org' : email;
       setIsAuthenticated(true);
-      setCurrentUserEmail(email.toLowerCase() === 'admin' ? 'admin@rumahbersinar.org' : email);
+      setCurrentUserEmail(activeEmail);
+      localStorage.setItem('admin_auth', 'true');
+      localStorage.setItem('admin_email', activeEmail);
 
       // Also try signing in or registering with Supabase in background if configured
       if (isSupabaseConfigured && supabase) {
-        try {
-          const { error: signInErr } = await supabase.auth.signInWithPassword({
-            email,
-            password: pass,
-          });
+        supabase.auth.signInWithPassword({
+          email,
+          password: pass,
+        }).then(({ error: signInErr }) => {
           if (signInErr) {
-            // If doesn't exist yet, try creating it in Supabase
-            await supabase.auth.signUp({
+            return supabase.auth.signUp({
               email,
               password: pass,
             });
           }
-        } catch (e) {
-          console.log('Background Supabase auth sync completed');
-        }
+        }).catch((e) => {
+          console.log('Background Supabase auth sync completed', e);
+        });
       }
       return;
     }
@@ -224,7 +246,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           setAuthError(error.message || 'Email atau password salah.');
         } else if (data.user) {
           setIsAuthenticated(true);
-          setCurrentUserEmail(data.user.email || email);
+          const userEmail = data.user.email || email;
+          setCurrentUserEmail(userEmail);
+          localStorage.setItem('admin_auth', 'true');
+          localStorage.setItem('admin_email', userEmail);
         }
       } catch (err: any) {
         setAuthError(err?.message || 'Terjadi kesalahan login.');
@@ -242,6 +267,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         await supabase.auth.signOut();
       } catch (e) {}
     }
+    localStorage.removeItem('admin_auth');
+    localStorage.removeItem('admin_email');
     setIsAuthenticated(false);
     setCurrentUserEmail(null);
   };
@@ -414,15 +441,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const totalPledged = whatsappPledges.reduce((acc, p) => acc + (p.amount || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#FBF7F0]/95 backdrop-blur-md flex flex-col font-body">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#FBF7F0] flex flex-col font-body">
       {/* ===================================================================== */}
       {/* 1. TOP HEADER (Matches Screenshots: STAFF ADMIN + View site + Sign out) */}
       {/* ===================================================================== */}
-      <header className="bg-white border-b border-stone-200 px-6 py-3.5 flex items-center justify-between shadow-2xs">
+      <header className="sticky top-0 z-20 bg-white border-b border-stone-200 px-6 py-3.5 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#f1b607] to-[#ea580c] flex items-center justify-center text-white shadow-xs">
-            <RumahBersinarLogo className="w-5 h-5 text-white" />
-          </div>
+          <RumahBersinarLogo variant="logogram" size="sm" />
           <div className="flex items-center gap-2">
             <span className="font-heading font-black tracking-wider text-base text-[#352106]">
               STAFF ADMIN
@@ -512,7 +537,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <input
                     type="password"
                     required
-                    placeholder="••••••••"
+                    placeholder="Enter password"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white text-stone-800"
