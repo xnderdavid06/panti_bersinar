@@ -21,6 +21,11 @@ import {
   PANTI_BRANCHES as DEFAULT_BRANCHES,
   CORE_VALUES as DEFAULT_CORE_VALUES,
   FAQS as DEFAULT_FAQS,
+  DEFAULT_FACILITIES,
+  DEFAULT_ACTIVITIES,
+  DEFAULT_HOMES,
+  DEFAULT_VISITS,
+  DEFAULT_WHATSAPP_PLEDGES,
 } from './data/mockData';
 import {
   SiteSettings,
@@ -29,6 +34,11 @@ import {
   PantiBranch,
   CoreValue,
   FaqItem,
+  Facility,
+  Activity,
+  Home,
+  VisitBooking,
+  WhatsAppPledge,
 } from './types';
 import {
   supabase,
@@ -41,6 +51,16 @@ import {
   getDonations,
   insertVolunteer,
   insertDonation,
+  getFacilities,
+  saveFacilities,
+  getActivities,
+  saveActivities,
+  getHomes,
+  saveHomes,
+  getVisits,
+  insertVisit,
+  getWhatsAppPledges,
+  insertWhatsAppPledge,
 } from './lib/supabase';
 
 const STORAGE_KEY_SETTINGS = 'rumah_bersinar_site_settings_v3';
@@ -49,9 +69,14 @@ const STORAGE_KEY_VALUES = 'rumah_bersinar_core_values_v3';
 const STORAGE_KEY_FAQS = 'rumah_bersinar_faqs_v3';
 const STORAGE_KEY_VOLUNTEERS = 'rumah_bersinar_volunteers_v3';
 const STORAGE_KEY_DONATIONS = 'rumah_bersinar_donations_v3';
+const STORAGE_KEY_FACILITIES = 'rumah_bersinar_facilities_v1';
+const STORAGE_KEY_ACTIVITIES = 'rumah_bersinar_activities_v1';
+const STORAGE_KEY_HOMES = 'rumah_bersinar_homes_v1';
+const STORAGE_KEY_VISITS = 'rumah_bersinar_visits_v1';
+const STORAGE_KEY_PLEDGES = 'rumah_bersinar_pledges_v1';
 
 export default function App() {
-  // 1. Site Settings State (Hero photo, Tagline, Story text, Contacts, Announcement)
+  // 1. Site Settings State
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
@@ -68,7 +93,7 @@ export default function App() {
     return DEFAULT_SITE_SETTINGS;
   });
 
-  // 2. Orphanage Branches State (Editable photos, addresses, capacities)
+  // 2. Orphanage Branches State
   const [branches, setBranches] = useState<PantiBranch[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_BRANCHES);
@@ -85,48 +110,85 @@ export default function App() {
     return DEFAULT_BRANCHES;
   });
 
-  // 3. 5 Core Values State (Editable names, descriptions, colors)
+  // 3. Core Values
   const [coreValues, setCoreValues] = useState<CoreValue[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_VALUES);
       if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Error loading core values from localStorage', e);
-    }
+    } catch (e) {}
     return DEFAULT_CORE_VALUES;
   });
 
-  // 4. FAQs State (Editable questions and answers, add/delete)
+  // 4. FAQs
   const [faqs, setFaqs] = useState<FaqItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_FAQS);
       if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Error loading FAQs from localStorage', e);
-    }
+    } catch (e) {}
     return DEFAULT_FAQS;
   });
 
-  // 5. Volunteer Applicants State
+  // 5. Volunteers
   const [volunteers, setVolunteers] = useState<VolunteerApplication[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_VOLUNTEERS);
       if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Error loading volunteers from localStorage', e);
-    }
+    } catch (e) {}
     return INITIAL_VOLUNTEER_APPLICATIONS;
   });
 
-  // 6. Donations Ledger State
+  // 6. Donations
   const [donations, setDonations] = useState<DonationRecord[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_DONATIONS);
       if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Error loading donations from localStorage', e);
-    }
+    } catch (e) {}
     return INITIAL_DONATIONS;
+  });
+
+  // 7. Facilities (Staff Admin Tab)
+  const [facilities, setFacilities] = useState<Facility[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_FACILITIES);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_FACILITIES;
+  });
+
+  // 8. Activities (Staff Admin Tab)
+  const [activities, setActivities] = useState<Activity[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ACTIVITIES);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_ACTIVITIES;
+  });
+
+  // 9. Homes (Staff Admin Tab)
+  const [homes, setHomes] = useState<Home[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_HOMES);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_HOMES;
+  });
+
+  // 10. Visits (Staff Admin Tab)
+  const [visits, setVisits] = useState<VisitBooking[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_VISITS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_VISITS;
+  });
+
+  // 11. WhatsApp Pledges (Staff Admin Tab)
+  const [whatsappPledges, setWhatsAppPledges] = useState<WhatsAppPledge[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PLEDGES);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_WHATSAPP_PLEDGES;
   });
 
   // Modals state
@@ -143,50 +205,18 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(siteSettings));
-    } catch (e) {
-      console.error('Error saving settings to localStorage', e);
-    }
-  }, [siteSettings]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE_KEY_BRANCHES, JSON.stringify(branches));
-    } catch (e) {
-      console.error('Error saving branches to localStorage', e);
-    }
-  }, [branches]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE_KEY_VALUES, JSON.stringify(coreValues));
-    } catch (e) {
-      console.error('Error saving core values to localStorage', e);
-    }
-  }, [coreValues]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE_KEY_FAQS, JSON.stringify(faqs));
-    } catch (e) {
-      console.error('Error saving FAQs to localStorage', e);
-    }
-  }, [faqs]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE_KEY_VOLUNTEERS, JSON.stringify(volunteers));
-    } catch (e) {
-      console.error('Error saving volunteers to localStorage', e);
-    }
-  }, [volunteers]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE_KEY_DONATIONS, JSON.stringify(donations));
-    } catch (e) {
-      console.error('Error saving donations to localStorage', e);
-    }
-  }, [donations]);
+      localStorage.setItem(STORAGE_KEY_FACILITIES, JSON.stringify(facilities));
+      localStorage.setItem(STORAGE_KEY_ACTIVITIES, JSON.stringify(activities));
+      localStorage.setItem(STORAGE_KEY_HOMES, JSON.stringify(homes));
+      localStorage.setItem(STORAGE_KEY_VISITS, JSON.stringify(visits));
+      localStorage.setItem(STORAGE_KEY_PLEDGES, JSON.stringify(whatsappPledges));
+    } catch (e) {}
+  }, [siteSettings, branches, coreValues, faqs, volunteers, donations, facilities, activities, homes, visits, whatsappPledges]);
 
   // Initial Supabase Data Fetch & Realtime Listeners
   useEffect(() => {
@@ -194,17 +224,22 @@ export default function App() {
 
     let isMounted = true;
 
-    // 1. Initial Load from Supabase Database
+    // Initial Load from Supabase Database
     getSiteSettings().then((s) => isMounted && setSiteSettings(s));
     getBranches().then((b) => isMounted && setBranches(b));
     getCoreValues().then((cv) => isMounted && setCoreValues(cv));
     getFaqs().then((f) => isMounted && setFaqs(f));
     getVolunteers().then((v) => isMounted && setVolunteers(v));
     getDonations().then((d) => isMounted && setDonations(d));
+    getFacilities().then((f) => isMounted && setFacilities(f));
+    getActivities().then((a) => isMounted && setActivities(a));
+    getHomes().then((h) => isMounted && setHomes(h));
+    getVisits().then((v) => isMounted && setVisits(v));
+    getWhatsAppPledges().then((p) => isMounted && setWhatsAppPledges(p));
 
-    // 2. Realtime WebSocket Subscriptions across tables
+    // Realtime WebSocket Subscriptions across tables
     const channel = supabase
-      .channel('public:db-realtime-sync')
+      .channel('public:full-realtime-sync')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'site_settings' },
@@ -249,6 +284,41 @@ export default function App() {
           getDonations().then((d) => isMounted && setDonations(d));
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'facilities' },
+        () => {
+          getFacilities().then((f) => isMounted && setFacilities(f));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'activities' },
+        () => {
+          getActivities().then((a) => isMounted && setActivities(a));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'homes' },
+        () => {
+          getHomes().then((h) => isMounted && setHomes(h));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'visits' },
+        () => {
+          getVisits().then((v) => isMounted && setVisits(v));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'whatsapp_pledges' },
+        () => {
+          getWhatsAppPledges().then((p) => isMounted && setWhatsAppPledges(p));
+        }
+      )
       .subscribe();
 
     return () => {
@@ -285,6 +355,20 @@ export default function App() {
     }
   };
 
+  const handleBookVisit = async (visit: VisitBooking) => {
+    setVisits((prev) => [visit, ...prev]);
+    if (isSupabaseConfigured) {
+      await insertVisit(visit);
+    }
+  };
+
+  const handleLogWhatsAppPledge = async (pledge: WhatsAppPledge) => {
+    setWhatsAppPledges((prev) => [pledge, ...prev]);
+    if (isSupabaseConfigured) {
+      await insertWhatsAppPledge(pledge);
+    }
+  };
+
   const handleScrollToStory = () => {
     const el = document.getElementById('story');
     if (el) {
@@ -303,7 +387,7 @@ export default function App() {
       />
 
       <main className="flex-1">
-        {/* Hero Section matching Screenshot 1: Dynamic Photo, Tagline, & Discover our story */}
+        {/* Hero Section */}
         <Hero
           siteSettings={siteSettings}
           onOpenDonation={() => handleOpenDonation()}
@@ -311,7 +395,7 @@ export default function App() {
           onScrollToStory={handleScrollToStory}
         />
 
-        {/* Section 1: Our Story (Screenshot 2) & What We Believe (Screenshot 3) */}
+        {/* Section 1: Our Story & What We Believe */}
         <AboutUsSection
           siteSettings={siteSettings}
           coreValues={coreValues}
@@ -319,21 +403,26 @@ export default function App() {
           onOpenVolunteer={() => handleOpenVolunteer()}
         />
 
-        {/* Section 2: Facilities & The Orphanage Homes in Surabaya & Sidoarjo */}
+        {/* Section 2: Homes, Facilities & Daily Activities (Updated in real-time from Staff Admin) */}
         <LocationsSection
           branches={branches}
+          homes={homes}
+          facilities={facilities}
+          activities={activities}
           onSelectVolunteerBranch={(branchId) => handleOpenVolunteer(branchId)}
           onOpenDonationForBranch={(branch: PantiBranch) => handleOpenDonation(undefined, 250000)}
+          onBookVisit={handleBookVisit}
+          onLogPledge={handleLogWhatsAppPledge}
         />
 
-        {/* Section 3: Frequently Asked Questions matching Screenshot 4 with WhatsApp CTA */}
+        {/* Section 3: Frequently Asked Questions */}
         <FaqSection
           faqs={faqs}
           whatsappPhone={siteSettings.whatsappPhone}
         />
       </main>
 
-      {/* Footer matching Screenshot 5 with Explore & Contact Us columns */}
+      {/* Footer */}
       <Footer
         siteSettings={siteSettings}
         onOpenDonation={() => handleOpenDonation()}
@@ -341,7 +430,7 @@ export default function App() {
         onOpenAdmin={() => setAdminModalOpen(true)}
       />
 
-      {/* Donation Modal with instant ledger logging */}
+      {/* Donation Modal */}
       <DonationModal
         isOpen={donationModalOpen}
         onClose={() => setDonationModalOpen(false)}
@@ -358,7 +447,7 @@ export default function App() {
         initialBranchId={targetBranchIdForVolunteer}
       />
 
-      {/* Comprehensive Admin Dashboard Modal with Username/Password login and full content/photo editing */}
+      {/* Staff Admin Dashboard Modal with exact Facilities, Activities, Homes, Visits, and WhatsApp Pledges tabs */}
       <AdminModal
         isOpen={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
@@ -374,6 +463,16 @@ export default function App() {
         onUpdateVolunteers={setVolunteers}
         donations={donations}
         onUpdateDonations={setDonations}
+        facilities={facilities}
+        onUpdateFacilities={setFacilities}
+        activities={activities}
+        onUpdateActivities={setActivities}
+        homes={homes}
+        onUpdateHomes={setHomes}
+        visits={visits}
+        onUpdateVisits={setVisits}
+        whatsappPledges={whatsappPledges}
+        onUpdateWhatsAppPledges={setWhatsAppPledges}
       />
     </div>
   );

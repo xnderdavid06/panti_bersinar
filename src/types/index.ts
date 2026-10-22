@@ -109,3 +109,52 @@ export interface BankAccount {
   branch: string;
   badge: string;
 }
+
+export interface Facility {
+  id: string;
+  name: string;
+  photo: string;
+  description: string;
+  order: number;
+}
+
+export interface Activity {
+  id: string;
+  title: string;
+  schedule: string;
+  photo: string;
+  description: string;
+  order: number;
+}
+
+export interface Home {
+  id: string;
+  name: string;
+  contact: string;
+  location: string;
+  mapsLink?: string;
+  visitActivities: string;
+  visitingHours: string;
+  description: string;
+  logo?: string;
+  photo?: string;
+  order: number;
+  isSample?: boolean;
+}
+
+export interface VisitBooking {
+  id: string;
+  visitor: string;
+  contact: string;
+  home: string;
+  date: string;
+  people: number;
+  notes?: string;
+  received: string;
+}
+
+export interface WhatsAppPledge {
+  id: string;
+  amount: number;
+  date: string;
+}

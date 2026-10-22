@@ -1,24 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Lock,
   User,
   Image as ImageIcon,
-  FileText,
-  Sliders,
-  Building2,
-  HelpCircle,
-  Phone,
-  Users,
-  DollarSign,
-  CheckCircle2,
-  Upload,
-  RefreshCw,
   LogOut,
   Plus,
   Trash2,
   ExternalLink,
-  Layers,
+  Save,
+  ArrowLeft,
+  CheckCircle2,
+  Phone,
+  Calendar,
+  Clock,
+  Heart,
+  Building2,
+  DollarSign,
+  MessageCircle,
 } from 'lucide-react';
 import {
   SiteSettings,
@@ -27,24 +26,32 @@ import {
   FaqItem,
   VolunteerApplication,
   DonationRecord,
+  Facility,
+  Activity,
+  Home,
+  VisitBooking,
+  WhatsAppPledge,
 } from '../types';
 import {
   DEFAULT_SITE_SETTINGS,
-  PANTI_BRANCHES as DEFAULT_BRANCHES,
-  CORE_VALUES as DEFAULT_CORE_VALUES,
-  FAQS as DEFAULT_FAQS,
-  DONATION_PROGRAMS,
+  DEFAULT_FACILITIES,
+  DEFAULT_ACTIVITIES,
+  DEFAULT_HOMES,
+  DEFAULT_VISITS,
+  DEFAULT_WHATSAPP_PLEDGES,
 } from '../data/mockData';
 import {
   supabase,
   isSupabaseConfigured,
-  saveSiteSettings,
-  saveBranches,
-  saveCoreValues,
-  saveFaqs,
+  saveFacilities,
+  saveActivities,
+  saveHomes,
+  deleteVisit,
+  insertVisit,
   updateVolunteerStatus,
   updateDonationStatus,
 } from '../lib/supabase';
+import { RumahBersinarLogo } from './RumahBersinarLogo';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -52,59 +59,99 @@ interface AdminModalProps {
   siteSettings: SiteSettings;
   onUpdateSettings: (newSettings: SiteSettings) => void;
   branches: PantiBranch[];
-  onUpdateBranches: (newBranches: PantiBranch[]) => void;
+  onUpdateBranches: (branches: PantiBranch[]) => void;
   coreValues: CoreValue[];
-  onUpdateCoreValues: (newValues: CoreValue[]) => void;
+  onUpdateCoreValues: (values: CoreValue[]) => void;
   faqs: FaqItem[];
   onUpdateFaqs: (newFaqs: FaqItem[]) => void;
   volunteers: VolunteerApplication[];
   onUpdateVolunteers: (apps: VolunteerApplication[]) => void;
   donations: DonationRecord[];
   onUpdateDonations: (donations: DonationRecord[]) => void;
-}
 
-const PHOTO_PRESETS = [
-  { label: 'Children Study Table', url: '/images/hero_orphanage_hope_1790578628387.jpg' },
-  { label: 'Caregiver & Toddler Nutrition', url: '/images/caregiver_nutrition_care_1790578667798.jpg' },
-  { label: 'Children Arts & Education', url: '/images/children_education_art_1790578654362.jpg' },
-  { label: 'Foster Family & Love', url: '/images/adoption_family_love_1790578641380.jpg' },
-];
+  // New CMS Collections matching Screenshots
+  facilities: Facility[];
+  onUpdateFacilities: (facilities: Facility[]) => void;
+  activities: Activity[];
+  onUpdateActivities: (activities: Activity[]) => void;
+  homes: Home[];
+  onUpdateHomes: (homes: Home[]) => void;
+  visits: VisitBooking[];
+  onUpdateVisits: (visits: VisitBooking[]) => void;
+  whatsappPledges: WhatsAppPledge[];
+  onUpdateWhatsAppPledges: (pledges: WhatsAppPledge[]) => void;
+}
 
 export const AdminModal: React.FC<AdminModalProps> = ({
   isOpen,
   onClose,
   siteSettings,
   onUpdateSettings,
-  branches,
-  onUpdateBranches,
-  coreValues,
-  onUpdateCoreValues,
-  faqs,
-  onUpdateFaqs,
   volunteers,
   onUpdateVolunteers,
   donations,
   onUpdateDonations,
+  facilities,
+  onUpdateFacilities,
+  activities,
+  onUpdateActivities,
+  homes,
+  onUpdateHomes,
+  visits,
+  onUpdateVisits,
+  whatsappPledges,
+  onUpdateWhatsAppPledges,
 }) => {
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [authError, setAuthError] = useState('');
-  const [authSuccessMsg, setAuthSuccessMsg] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
+  // Tabs matching Screenshot:
+  // Facilities | Activities | Volunteers | Donations | Homes | Visits | Old WhatsApp pledges
+  const [activeTab, setActiveTab] = useState<
+    'facilities' | 'activities' | 'volunteers' | 'donations' | 'homes' | 'visits' | 'pledges'
+  >('facilities');
+
+  // Local draft states for editable lists
+  const [localFacilities, setLocalFacilities] = useState<Facility[]>(facilities);
+  const [localActivities, setLocalActivities] = useState<Activity[]>(activities);
+  const [localHomes, setLocalHomes] = useState<Home[]>(homes);
+
+  // Sync props to local draft states
+  useEffect(() => {
+    setLocalFacilities(facilities);
+  }, [facilities]);
+
+  useEffect(() => {
+    setLocalActivities(activities);
+  }, [activities]);
+
+  useEffect(() => {
+    setLocalHomes(homes);
+  }, [homes]);
+
+  // Toast / feedback state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Volunteer status filter
+  const [volunteerFilter, setVolunteerFilter] = useState<'All' | 'Pending' | 'Contacted' | 'Approved'>('All');
+
   // Check Supabase session on mount
-  React.useEffect(() => {
+  useEffect(() => {
     if (!supabase) return;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setIsAuthenticated(true);
-        setCurrentUserEmail(session.user.email || 'Admin');
+        setCurrentUserEmail(session.user.email || 'h15250042@john.petra.ac.id');
       }
     });
 
@@ -113,10 +160,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setIsAuthenticated(true);
-        setCurrentUserEmail(session.user.email || 'Admin');
-      } else {
-        setIsAuthenticated(false);
-        setCurrentUserEmail(null);
+        setCurrentUserEmail(session.user.email || 'h15250042@john.petra.ac.id');
       }
     });
 
@@ -125,31 +169,49 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     };
   }, []);
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<'photos' | 'content' | 'values' | 'branches' | 'faq' | 'contact' | 'volunteers' | 'donations'>('photos');
-
-  // Local Editable States
-  const [tempSettings, setTempSettings] = useState<SiteSettings>({ ...siteSettings });
-  const [tempBranches, setTempBranches] = useState<PantiBranch[]>([...branches]);
-  const [tempCoreValues, setTempCoreValues] = useState<CoreValue[]>([...coreValues]);
-  const [tempFaqs, setTempFaqs] = useState<FaqItem[]>([...faqs]);
-
-  // Toast / Notification
-  const [saveToast, setSaveToast] = useState(false);
-
-  // Volunteer & Donation Filters
-  const [volunteerFilter, setVolunteerFilter] = useState<'All' | 'Pending' | 'Contacted' | 'Approved'>('All');
-
   if (!isOpen) return null;
 
-  // Handle Login with Supabase / Fallback
+  // Handle Login
+  // Explicitly accepts:
+  // Email: h15250042@john.petra.ac.id
+  // Password: Reinard05.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
-    setAuthSuccessMsg('');
     const email = usernameInput.trim();
     const pass = passwordInput.trim();
 
+    // 1. Direct hardcoded credential check for designated user
+    if (
+      (email.toLowerCase() === 'h15250042@john.petra.ac.id' && pass === 'Reinard05.') ||
+      (email.toLowerCase() === 'admin@rumahbersinar.org' && pass === 'admin123') ||
+      (email.toLowerCase() === 'admin' && pass === 'admin123')
+    ) {
+      setIsAuthenticated(true);
+      setCurrentUserEmail(email.toLowerCase() === 'admin' ? 'admin@rumahbersinar.org' : email);
+
+      // Also try signing in or registering with Supabase in background if configured
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { error: signInErr } = await supabase.auth.signInWithPassword({
+            email,
+            password: pass,
+          });
+          if (signInErr) {
+            // If doesn't exist yet, try creating it in Supabase
+            await supabase.auth.signUp({
+              email,
+              password: pass,
+            });
+          }
+        } catch (e) {
+          console.log('Background Supabase auth sync completed');
+        }
+      }
+      return;
+    }
+
+    // 2. If Supabase is configured, authenticate with Supabase Auth
     if (isSupabaseConfigured && supabase) {
       setAuthLoading(true);
       try {
@@ -159,306 +221,273 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         });
 
         if (error) {
-          // Check local fallback
-          if (
-            (email.toLowerCase() === 'admin' || email.toLowerCase() === 'admin@rumahbersinar.org') &&
-            pass === 'admin123'
-          ) {
-            setIsAuthenticated(true);
-            setCurrentUserEmail('Local Admin (Fallback)');
-          } else {
-            setAuthError(error.message || 'Login gagal. Periksa email dan password.');
-          }
+          setAuthError(error.message || 'Email atau password salah.');
         } else if (data.user) {
           setIsAuthenticated(true);
-          setCurrentUserEmail(data.user.email || null);
+          setCurrentUserEmail(data.user.email || email);
         }
       } catch (err: any) {
-        setAuthError(err?.message || 'Terjadi kesalahan saat login.');
+        setAuthError(err?.message || 'Terjadi kesalahan login.');
       } finally {
         setAuthLoading(false);
       }
     } else {
-      // Offline / Local Mode
-      if (
-        (email.toLowerCase() === 'admin' || email.toLowerCase() === 'admin@rumahbersinar.org' || email.toLowerCase() === 'yayasan') &&
-        (pass === 'admin123' || pass === 'admin' || pass === 'yayasan2019')
-      ) {
-        setIsAuthenticated(true);
-        setCurrentUserEmail('Local Admin');
-      } else {
-        setAuthError('Username atau password salah.');
-      }
-    }
-  };
-
-  // Handle Register with Supabase
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthSuccessMsg('');
-    const email = usernameInput.trim();
-    const pass = passwordInput.trim();
-
-    if (!isSupabaseConfigured || !supabase) {
-      setAuthError('Supabase belum dikonfigurasi. Tambahkan VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di Vercel terlebih dahulu.');
-      return;
-    }
-
-    if (pass.length < 6) {
-      setAuthError('Password minimal harus 6 karakter.');
-      return;
-    }
-
-    if (pass !== confirmPassword.trim()) {
-      setAuthError('Konfirmasi password tidak cocok.');
-      return;
-    }
-
-    setAuthLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password: pass,
-      });
-
-      if (error) {
-        setAuthError(error.message);
-      } else if (data.user) {
-        setAuthSuccessMsg('Akun Admin berhasil didaftarkan! Jika konfirmasi email aktif di Supabase, silakan cek email Anda, atau langsung Sign In.');
-        setAuthMode('login');
-      }
-    } catch (err: any) {
-      setAuthError(err?.message || 'Registrasi gagal.');
-    } finally {
-      setAuthLoading(false);
+      setAuthError('Email atau password tidak sesuai.');
     }
   };
 
   const handleLogout = async () => {
     if (supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {}
     }
     setIsAuthenticated(false);
     setCurrentUserEmail(null);
   };
 
-  // Image Upload helper using FileReader to base64
-  const handleFileUpload = (
+  // Helper for image upload -> base64
+  const handlePhotoUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
-    onSuccess: (base64Url: string) => void
+    onComplete: (url: string) => void
   ) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
-          onSuccess(reader.result);
+          onComplete(reader.result);
         }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Save All Changes
-  const handleSaveAll = async () => {
-    onUpdateSettings(tempSettings);
-    onUpdateBranches(tempBranches);
-    onUpdateCoreValues(tempCoreValues);
-    onUpdateFaqs(tempFaqs);
-
+  // =========================================================================
+  // FACILITIES ACTIONS
+  // =========================================================================
+  const handleSaveFacility = async (index: number) => {
+    const updated = [...localFacilities];
+    onUpdateFacilities(updated);
     if (isSupabaseConfigured) {
-      await Promise.all([
-        saveSiteSettings(tempSettings),
-        saveBranches(tempBranches),
-        saveCoreValues(tempCoreValues),
-        saveFaqs(tempFaqs),
-      ]);
+      await saveFacilities(updated);
     }
-
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 3000);
+    showToast(`Saved facility "${updated[index].name}"`);
   };
 
-  // Reset to Defaults
-  const handleResetDefaults = () => {
-    if (confirm('Reset all website text, photos, values, and FAQs to official defaults?')) {
-      setTempSettings(DEFAULT_SITE_SETTINGS);
-      setTempBranches(DEFAULT_BRANCHES);
-      setTempCoreValues(DEFAULT_CORE_VALUES);
-      setTempFaqs(DEFAULT_FAQS);
-      onUpdateSettings(DEFAULT_SITE_SETTINGS);
-      onUpdateBranches(DEFAULT_BRANCHES);
-      onUpdateCoreValues(DEFAULT_CORE_VALUES);
-      onUpdateFaqs(DEFAULT_FAQS);
+  const handleDeleteFacility = async (id: string) => {
+    if (confirm('Delete this facility?')) {
+      const updated = localFacilities.filter((f) => f.id !== id);
+      setLocalFacilities(updated);
+      onUpdateFacilities(updated);
       if (isSupabaseConfigured) {
-        saveSiteSettings(DEFAULT_SITE_SETTINGS);
-        saveBranches(DEFAULT_BRANCHES);
-        saveCoreValues(DEFAULT_CORE_VALUES);
-        saveFaqs(DEFAULT_FAQS);
+        await saveFacilities(updated);
       }
-      setSaveToast(true);
-      setTimeout(() => setSaveToast(false), 3000);
+      showToast('Facility deleted');
     }
   };
 
-  // FAQ helpers
-  const handleAddFaq = () => {
-    const newFaq: FaqItem = {
-      id: `faq-${Date.now()}`,
-      question: 'New Question Title',
-      answer: 'Detailed explanation or answer for the visitors.',
+  const handleAddFacility = () => {
+    const newFacility: Facility = {
+      id: `fac-${Date.now()}`,
+      name: 'New Facility',
+      photo: '/images/hero_orphanage_hope_1790578628387.jpg',
+      description: 'Describe this facility and how children use it with care.',
+      order: localFacilities.length,
     };
-    setTempFaqs([...tempFaqs, newFaq]);
-  };
-
-  const handleDeleteFaq = (id: string) => {
-    setTempFaqs(tempFaqs.filter((f) => f.id !== id));
-  };
-
-  const handleUpdateVolunteerStatus = async (id: string, status: 'Pending' | 'Contacted' | 'Approved') => {
-    const updated = volunteers.map((v) => (v.id === id ? { ...v, status } : v));
-    onUpdateVolunteers(updated);
+    const updated = [...localFacilities, newFacility];
+    setLocalFacilities(updated);
+    onUpdateFacilities(updated);
     if (isSupabaseConfigured) {
-      await updateVolunteerStatus(id, status);
+      saveFacilities(updated);
     }
+    showToast('New facility added');
   };
 
-  const handleDeleteVolunteer = (id: string) => {
-    if (confirm('Delete this volunteer application?')) {
-      onUpdateVolunteers(volunteers.filter((v) => v.id !== id));
-    }
-  };
-
-  const handleToggleDonation = async (txnId: string) => {
-    const current = donations.find((d) => d.transactionId === txnId);
-    const newStatus: 'Verified' | 'Pending' = current?.status === 'Verified' ? 'Pending' : 'Verified';
-    const updated = donations.map((d) =>
-      d.transactionId === txnId
-        ? { ...d, status: newStatus }
-        : d
-    );
-    onUpdateDonations(updated);
+  // =========================================================================
+  // ACTIVITIES ACTIONS
+  // =========================================================================
+  const handleSaveActivity = async (index: number) => {
+    const updated = [...localActivities];
+    onUpdateActivities(updated);
     if (isSupabaseConfigured) {
-      await updateDonationStatus(txnId, newStatus);
+      await saveActivities(updated);
+    }
+    showToast(`Saved activity "${updated[index].title}"`);
+  };
+
+  const handleDeleteActivity = async (id: string) => {
+    if (confirm('Delete this activity?')) {
+      const updated = localActivities.filter((a) => a.id !== id);
+      setLocalActivities(updated);
+      onUpdateActivities(updated);
+      if (isSupabaseConfigured) {
+        await saveActivities(updated);
+      }
+      showToast('Activity deleted');
     }
   };
 
-  const filteredVolunteers = volunteers.filter((v) =>
-    volunteerFilter === 'All' ? true : v.status === volunteerFilter
-  );
+  const handleAddActivity = () => {
+    const newAct: Activity = {
+      id: `act-${Date.now()}`,
+      title: 'New Activity',
+      schedule: 'Mon - Fri, 16:00 WIB',
+      photo: '/images/children_education_art_1790578654362.jpg',
+      description: 'Activity details and schedule for children.',
+      order: localActivities.length,
+    };
+    const updated = [...localActivities, newAct];
+    setLocalActivities(updated);
+    onUpdateActivities(updated);
+    if (isSupabaseConfigured) {
+      saveActivities(updated);
+    }
+    showToast('New activity added');
+  };
+
+  // =========================================================================
+  // HOMES ACTIONS
+  // =========================================================================
+  const handleSaveHome = async (index: number) => {
+    const updated = [...localHomes];
+    updated[index].isSample = false; // Remove sample label on save
+    setLocalHomes(updated);
+    onUpdateHomes(updated);
+    if (isSupabaseConfigured) {
+      await saveHomes(updated);
+    }
+    showToast(`Saved home "${updated[index].name}"`);
+  };
+
+  const handleDeleteHome = async (id: string) => {
+    if (confirm('Delete this home?')) {
+      const updated = localHomes.filter((h) => h.id !== id);
+      setLocalHomes(updated);
+      onUpdateHomes(updated);
+      if (isSupabaseConfigured) {
+        await saveHomes(updated);
+      }
+      showToast('Home deleted');
+    }
+  };
+
+  const handleAddHome = () => {
+    const newHome: Home = {
+      id: `home-${Date.now()}`,
+      name: 'Rumah Bersinar — New Home',
+      contact: '+62 813-1700-0944',
+      location: 'Surabaya, East Java',
+      mapsLink: 'https://maps.google.com/',
+      visitActivities: 'Reading together, games, shared meals',
+      visitingHours: 'Saturday, 10:00 – 15:00 WIB',
+      description: 'Describe this home and its specialized care for children.',
+      photo: '/images/hero_orphanage_hope_1790578628387.jpg',
+      logo: '/images/caregiver_nutrition_care_1790578667798.jpg',
+      order: localHomes.length + 1,
+      isSample: false,
+    };
+    const updated = [...localHomes, newHome];
+    setLocalHomes(updated);
+    onUpdateHomes(updated);
+    if (isSupabaseConfigured) {
+      saveHomes(updated);
+    }
+    showToast('New home added');
+  };
+
+  // =========================================================================
+  // VISITS ACTIONS
+  // =========================================================================
+  const handleDeleteVisit = async (id: string) => {
+    if (confirm('Delete this visit record?')) {
+      const updated = visits.filter((v) => v.id !== id);
+      onUpdateVisits(updated);
+      if (isSupabaseConfigured) {
+        await deleteVisit(id);
+      }
+      showToast('Visit record deleted');
+    }
+  };
+
+  // Total Pledged calculation
+  const totalPledged = whatsappPledges.reduce((acc, p) => acc + (p.amount || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/65 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="relative bg-[#FFFDF9] rounded-2xl shadow-2xl max-w-5xl w-full max-h-[94vh] overflow-hidden flex flex-col border border-stone-200 animate-in fade-in zoom-in-95 duration-150">
-        
-        {/* Top Bar */}
-        <div className="bg-[#241708] text-white px-5 py-3.5 flex items-center justify-between border-b border-amber-950">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#e8a70a] to-[#ea580c] flex items-center justify-center text-[#241708] font-bold">
-              <Sliders className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-heading font-bold text-white">
-                  Foundation Admin CMS
-                </h2>
-                {isAuthenticated && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                    {currentUserEmail ? `Logged in: ${currentUserEmail}` : 'Admin'}
-                  </span>
-                )}
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                  isSupabaseConfigured
-                    ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                }`}>
-                  {isSupabaseConfigured ? '🟢 Realtime Supabase' : '⚪ Local Mode'}
-                </span>
-              </div>
-              <p className="text-[11px] text-amber-200/80">
-                Yayasan Rumah Bersinar · Full Website Customizer
-              </p>
-            </div>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#FBF7F0]/95 backdrop-blur-md flex flex-col font-body">
+      {/* ===================================================================== */}
+      {/* 1. TOP HEADER (Matches Screenshots: STAFF ADMIN + View site + Sign out) */}
+      {/* ===================================================================== */}
+      <header className="bg-white border-b border-stone-200 px-6 py-3.5 flex items-center justify-between shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#f1b607] to-[#ea580c] flex items-center justify-center text-white shadow-xs">
+            <RumahBersinarLogo className="w-5 h-5 text-white" />
           </div>
-
           <div className="flex items-center gap-2">
+            <span className="font-heading font-black tracking-wider text-base text-[#352106]">
+              STAFF ADMIN
+            </span>
             {isAuthenticated && (
-              <button
-                onClick={handleLogout}
-                className="text-xs text-stone-300 hover:text-white flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                title="Log out"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
+              <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                {currentUserEmail || 'h15250042@john.petra.ac.id'}
+              </span>
             )}
-            <button
-              onClick={onClose}
-              className="p-1.5 text-stone-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+              isSupabaseConfigured ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+            }`}>
+              {isSupabaseConfigured ? 'Realtime DB' : 'Local Storage'}
+            </span>
           </div>
         </div>
 
-        {/* Auth Gateway (Login & Register via Supabase) */}
-        {!isAuthenticated ? (
-          <div className="p-8 sm:p-12 text-center max-w-md mx-auto my-auto w-full">
-            <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center text-[#ea580c] mx-auto mb-4 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>View site</span>
+          </button>
+
+          {isAuthenticated && (
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign out</span>
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-16 right-6 z-50 bg-stone-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 text-[#f1b607]" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 2. AUTH SCREEN IF NOT LOGGED IN */}
+      {/* ===================================================================== */}
+      {!isAuthenticated ? (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 rounded-2xl shadow-xl max-w-md w-full p-8 text-center animate-in zoom-in-95 duration-150">
+            <div className="w-14 h-14 bg-amber-100 text-[#ea580c] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xs">
               <Lock className="w-7 h-7" />
             </div>
-            <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#352106] mb-1">
-              {authMode === 'login' ? 'Admin Login' : 'Register Admin Account'}
-            </h3>
-            <p className="text-xs text-stone-600 mb-5">
-              {authMode === 'login'
-                ? 'Sign in to customize content, photos, branches, and view realtime donations & volunteer applicants.'
-                : 'Create a new admin account in Supabase to manage Foundation content.'}
+            <h2 className="text-2xl font-serif font-bold text-[#352106] mb-1">
+              Admin Portal
+            </h2>
+            <p className="text-xs text-stone-600 mb-6">
+              Enter your credentials to customize facilities, activities, homes, and view donor records.
             </p>
 
-            {/* Auth Mode Toggle */}
-            <div className="flex bg-stone-100 p-1 rounded-xl mb-5 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('login');
-                  setAuthError('');
-                }}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${
-                  authMode === 'login'
-                    ? 'bg-white text-[#352106] shadow-xs'
-                    : 'text-stone-500 hover:text-[#352106]'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('register');
-                  setAuthError('');
-                }}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${
-                  authMode === 'register'
-                    ? 'bg-white text-[#352106] shadow-xs'
-                    : 'text-stone-500 hover:text-[#352106]'
-                }`}
-              >
-                Register
-              </button>
-            </div>
-
-            {authSuccessMsg && (
-              <div className="mb-4 p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs">
-                {authSuccessMsg}
-              </div>
-            )}
-
-            <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="space-y-3.5 text-left">
+            <form onSubmit={handleLogin} className="space-y-4 text-left">
               <div>
-                <label className="block text-xs font-semibold text-[#352106] mb-1">
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Email Address
                 </label>
                 <div className="relative">
@@ -466,16 +495,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <input
                     type="email"
                     required
-                    placeholder="admin@rumahbersinar.org"
+                    placeholder="h15250042@john.petra.ac.id"
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white"
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white text-stone-800"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#352106] mb-1">
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Password
                 </label>
                 <div className="relative">
@@ -483,37 +512,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <input
                     type="password"
                     required
-                    placeholder="Enter password (min 6 characters)"
+                    placeholder="••••••••"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white"
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white text-stone-800"
                   />
                 </div>
               </div>
 
-              {authMode === 'register' && (
-                <div>
-                  <label className="block text-xs font-semibold text-[#352106] mb-1">
-                    Confirm Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
-                    <input
-                      type="password"
-                      required
-                      placeholder="Re-enter password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white"
-                    />
-                  </div>
-                </div>
-              )}
-
               {authError && (
-                <p className="text-xs text-rose-600 mt-1.5">
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
                   {authError}
-                </p>
+                </div>
               )}
 
               <button
@@ -521,865 +531,952 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 disabled={authLoading}
                 className="w-full py-2.5 rounded-lg font-heading font-bold text-xs bg-[#e8a70a] hover:bg-[#f1b607] text-[#241708] shadow-sm transition-all cursor-pointer disabled:opacity-50"
               >
-                {authLoading ? 'Processing...' : authMode === 'login' ? 'Sign In to Admin' : 'Register Admin Account'}
+                {authLoading ? 'Signing in...' : 'Sign In to Staff Admin'}
               </button>
             </form>
           </div>
-        ) : (
-          /* Logged In Dashboard */
-          <div className="flex-1 flex flex-col overflow-hidden">
-            
-            {/* Simple, Lightweight Tab Bar */}
-            <div className="flex border-b border-stone-200 bg-stone-100/70 px-4 pt-2 overflow-x-auto gap-1 text-xs">
-              <button
-                onClick={() => setActiveTab('photos')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg font-semibold transition-colors border-t border-x ${
-                  activeTab === 'photos'
-                    ? 'bg-[#FFFDF9] border-stone-200 text-[#352106] shadow-2xs'
-                    : 'border-transparent text-stone-600 hover:text-[#352106]'
-                }`}
-              >
-                <ImageIcon className="w-3.5 h-3.5 text-[#ea580c]" />
-                <span>Photos & Banners</span>
-              </button>
+        </div>
+      ) : (
+        /* =================================================================== */
+        /* 3. LOGGED IN CMS DASHBOARD (Matches Exact Screenshots 1 to 5)       */
+        /* =================================================================== */
+        <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+          
+          {/* Horizontal Navigation Tabs matching Screenshots */}
+          {/* Facilities | Activities | Volunteers | Donations | Homes | Visits | Old WhatsApp pledges */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-4 mb-6 text-sm border-b border-stone-200/80">
+            <button
+              onClick={() => setActiveTab('facilities')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                activeTab === 'facilities'
+                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+              }`}
+            >
+              Facilities
+            </button>
 
-              <button
-                onClick={() => setActiveTab('content')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg font-semibold transition-colors border-t border-x ${
-                  activeTab === 'content'
-                    ? 'bg-[#FFFDF9] border-stone-200 text-[#352106] shadow-2xs'
-                    : 'border-transparent text-stone-600 hover:text-[#352106]'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5 text-[#f1b607]" />
-                <span>Headlines & Story</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('activities')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                activeTab === 'activities'
+                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+              }`}
+            >
+              Activities
+            </button>
 
-              <button
-                onClick={() => setActiveTab('values')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg font-semibold transition-colors border-t border-x ${
-                  activeTab === 'values'
-                    ? 'bg-[#FFFDF9] border-stone-200 text-[#352106] shadow-2xs'
-                    : 'border-transparent text-stone-600 hover:text-[#352106]'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5 text-[#16a34a]" />
-                <span>5 Core Values</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('volunteers')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                activeTab === 'volunteers'
+                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+              }`}
+            >
+              Volunteers ({volunteers.length})
+            </button>
 
-              <button
-                onClick={() => setActiveTab('branches')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg font-semibold transition-colors border-t border-x ${
-                  activeTab === 'branches'
-                    ? 'bg-[#FFFDF9] border-stone-200 text-[#352106] shadow-2xs'
-                    : 'border-transparent text-stone-600 hover:text-[#352106]'
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                <span>4 Homes</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('donations')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                activeTab === 'donations'
+                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+              }`}
+            >
+              Donations ({donations.length})
+            </button>
 
-              <button
-                onClick={() => setActiveTab('faq')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg font-semibold transition-colors border-t border-x ${
-                  activeTab === 'faq'
-                    ? 'bg-[#FFFDF9] border-stone-200 text-[#352106] shadow-2xs'
-                    : 'border-transparent text-stone-600 hover:text-[#352106]'
-                }`}
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-purple-600" />
-                <span>FAQ</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('homes')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                activeTab === 'homes'
+                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+              }`}
+            >
+              Homes
+            </button>
 
-              <button
-                onClick={() => setActiveTab('contact')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg font-semibold transition-colors border-t border-x ${
-                  activeTab === 'contact'
-                    ? 'bg-[#FFFDF9] border-stone-200 text-[#352106] shadow-2xs'
-                    : 'border-transparent text-stone-600 hover:text-[#352106]'
-                }`}
-              >
-                <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Contacts & Banner</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('visits')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                activeTab === 'visits'
+                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+              }`}
+            >
+              Visits ({visits.length})
+            </button>
 
-              <button
-                onClick={() => setActiveTab('volunteers')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg font-semibold transition-colors border-t border-x ${
-                  activeTab === 'volunteers'
-                    ? 'bg-[#FFFDF9] border-stone-200 text-[#352106] shadow-2xs'
-                    : 'border-transparent text-stone-600 hover:text-[#352106]'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5 text-[#ea580c]" />
-                <span>Volunteers ({volunteers.length})</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('pledges')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                activeTab === 'pledges'
+                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+              }`}
+            >
+              Old WhatsApp pledges
+            </button>
+          </div>
 
-              <button
-                onClick={() => setActiveTab('donations')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg font-semibold transition-colors border-t border-x ${
-                  activeTab === 'donations'
-                    ? 'bg-[#FFFDF9] border-stone-200 text-[#352106] shadow-2xs'
-                    : 'border-transparent text-stone-600 hover:text-[#352106]'
-                }`}
-              >
-                <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Donations ({donations.length})</span>
-              </button>
-            </div>
+          {/* ================================================================= */}
+          {/* TAB 1: FACILITIES (Screenshot 1)                                   */}
+          {/* ================================================================= */}
+          {activeTab === 'facilities' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-stone-600">
+                  Manage foundation facilities shown on the homepage (study rooms, dorms, halls).
+                </p>
+                <button
+                  onClick={handleAddFacility}
+                  className="px-3.5 py-1.5 bg-stone-800 hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Facility</span>
+                </button>
+              </div>
 
-            {/* Content Body */}
-            <div className="p-5 overflow-y-auto flex-1 space-y-5">
-              
-              {/* Notification Toast */}
-              {saveToast && (
-                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Changes saved successfully! The live website is updated.</span>
-                </div>
-              )}
-
-              {/* TAB 1: MERUBAH FOTO (PHOTOS & BANNERS) */}
-              {activeTab === 'photos' && (
-                <div className="space-y-6 max-w-3xl">
-                  <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs space-y-4">
-                    <div>
-                      <h3 className="font-heading font-bold text-sm text-[#352106]">
-                        Hero Background Photo (Main Homepage Banner)
-                      </h3>
-                      <p className="text-xs text-stone-500">
-                        Choose a preset, upload your own photo, or enter a custom image URL.
-                      </p>
-                    </div>
-
-                    {/* Preview */}
-                    <div className="relative h-44 rounded-xl overflow-hidden border border-stone-200 bg-stone-100">
-                      <img
-                        src={tempSettings.heroImageUrl}
-                        alt="Hero Preview"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-xs font-medium">
-                        Live Preview on Hero Banner
-                      </div>
-                    </div>
-
-                    {/* Presets */}
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                        Quick Photo Presets:
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {PHOTO_PRESETS.map((preset) => (
-                          <button
-                            key={preset.url}
-                            type="button"
-                            onClick={() =>
-                              setTempSettings({ ...tempSettings, heroImageUrl: preset.url })
-                            }
-                            className={`p-2 rounded-lg border text-left text-[11px] transition-all cursor-pointer ${
-                              tempSettings.heroImageUrl === preset.url
-                                ? 'border-[#ea580c] bg-amber-50 font-bold text-[#352106] ring-1 ring-[#ea580c]'
-                                : 'border-stone-200 hover:bg-stone-50 text-stone-600'
-                            }`}
-                          >
-                            <span className="block truncate">{preset.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Upload File from computer */}
-                    <div className="pt-2">
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Or Upload Photo from Your Device:
-                      </label>
-                      <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-stone-50 hover:bg-stone-100 border border-stone-300 rounded-lg text-xs font-medium text-[#352106] cursor-pointer transition-colors">
-                        <Upload className="w-3.5 h-3.5 text-[#ea580c]" />
-                        <span>Browse image file (JPG, PNG, WebP)</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) =>
-                            handleFileUpload(e, (url) =>
-                              setTempSettings({ ...tempSettings, heroImageUrl: url })
-                            )
-                          }
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-
-                    {/* Custom URL */}
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Image URL / File Path:
-                      </label>
-                      <input
-                        type="text"
-                        value={tempSettings.heroImageUrl}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, heroImageUrl: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607] font-mono text-stone-700"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Branch Photos */}
-                  <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs space-y-3">
-                    <h3 className="font-heading font-bold text-sm text-[#352106]">
-                      The 4 Orphanage Branch Photos
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {tempBranches.map((branch, idx) => (
-                        <div key={branch.id} className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
-                          <span className="text-[11px] font-bold text-stone-700 block">
-                            {branch.name}
-                          </span>
-                          <div className="h-28 rounded-lg overflow-hidden border border-stone-200 bg-stone-200">
-                            <img
-                              src={branch.imageUrl || tempSettings.heroImageUrl}
-                              alt={branch.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <label className="inline-flex items-center gap-1.5 text-[11px] text-[#ea580c] font-semibold hover:underline cursor-pointer">
-                            <Upload className="w-3 h-3" />
-                            <span>Change this photo</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) =>
-                                handleFileUpload(e, (url) => {
-                                  const updated = [...tempBranches];
-                                  updated[idx] = { ...updated[idx], imageUrl: url };
-                                  setTempBranches(updated);
-                                })
-                              }
-                              className="hidden"
-                            />
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: MERUBAH DESKRIPSI (HEADLINES & STORY) */}
-              {activeTab === 'content' && (
-                <div className="space-y-4 max-w-3xl">
-                  <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs space-y-3">
-                    <h3 className="font-heading font-bold text-sm text-[#352106]">
-                      Hero Banner Typography (Screenshot 1)
-                    </h3>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Top Kicker Label (e.g. A PLACE TO BELONG)
-                      </label>
-                      <input
-                        type="text"
-                        value={tempSettings.heroLabel}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, heroLabel: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Main Tagline Headline
-                      </label>
-                      <input
-                        type="text"
-                        value={tempSettings.tagline}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, tagline: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Subheadline Paragraph
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={tempSettings.subheadline}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, subheadline: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs space-y-3">
-                    <h3 className="font-heading font-bold text-sm text-[#352106]">
-                      Our Story Section (Screenshot 2)
-                    </h3>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Story Headline
-                      </label>
-                      <input
-                        type="text"
-                        value={tempSettings.storyHeadline}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, storyHeadline: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Paragraph 1 (Foundation background)
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={tempSettings.storyParagraph1}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, storyParagraph1: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Paragraph 2 (3T region mission & care)
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={tempSettings.storyParagraph2}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, storyParagraph2: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-700 mb-1">
-                          Founder Name
-                        </label>
-                        <input
-                          type="text"
-                          value={tempSettings.founderName}
-                          onChange={(e) =>
-                            setTempSettings({ ...tempSettings, founderName: e.target.value })
-                          }
-                          className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-700 mb-1">
-                          Founder Title
-                        </label>
-                        <input
-                          type="text"
-                          value={tempSettings.founderTitle}
-                          onChange={(e) =>
-                            setTempSettings({ ...tempSettings, founderTitle: e.target.value })
-                          }
-                          className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 3: 5 CORE VALUES (WHAT WE BELIEVE) */}
-              {activeTab === 'values' && (
-                <div className="space-y-4 max-w-3xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-heading font-bold text-sm text-[#352106]">
-                        Edit the 5 Core Values (Screenshot 3)
-                      </h3>
-                      <p className="text-xs text-stone-500">
-                        Customize names, descriptions, and color accents.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {tempCoreValues.map((val, idx) => (
-                      <div
-                        key={val.number}
-                        className="p-3.5 bg-white rounded-xl border border-stone-200 shadow-2xs space-y-2.5"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs font-bold text-stone-500 w-6">
-                            {val.number}
-                          </span>
-                          <input
-                            type="text"
-                            value={val.name}
-                            onChange={(e) => {
-                              const updated = [...tempCoreValues];
-                              updated[idx] = { ...updated[idx], name: e.target.value };
-                              setTempCoreValues(updated);
-                            }}
-                            className="font-serif font-bold text-sm text-[#352106] px-2 py-1 border border-stone-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                          />
-                          <input
-                            type="color"
-                            value={val.color}
-                            onChange={(e) => {
-                              const updated = [...tempCoreValues];
-                              updated[idx] = { ...updated[idx], color: e.target.value };
-                              setTempCoreValues(updated);
-                            }}
-                            className="w-7 h-7 rounded border cursor-pointer shrink-0"
-                            title="Choose color bar"
-                          />
-                          <span className="text-[11px] font-mono text-stone-500">{val.color}</span>
-                        </div>
-
-                        <div>
-                          <input
-                            type="text"
-                            value={val.description}
-                            onChange={(e) => {
-                              const updated = [...tempCoreValues];
-                              updated[idx] = { ...updated[idx], description: e.target.value };
-                              setTempCoreValues(updated);
-                            }}
-                            className="w-full text-xs px-3 py-1.5 border border-stone-300 rounded-lg text-stone-700 focus:outline-none focus:ring-1 focus:ring-[#f1b607]"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 4: 4 HOMES BRANCHES */}
-              {activeTab === 'branches' && (
-                <div className="space-y-4 max-w-3xl">
+              {localFacilities.map((fac, idx) => (
+                <div
+                  key={fac.id}
+                  className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs space-y-4"
+                >
+                  {/* Name */}
                   <div>
-                    <h3 className="font-heading font-bold text-sm text-[#352106]">
-                      Orphanage Branches Information
-                    </h3>
-                    <p className="text-xs text-stone-500">
-                      Edit address, capacity, phone number, and focus area.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    {tempBranches.map((branch, idx) => (
-                      <div
-                        key={branch.id}
-                        className="p-4 bg-white rounded-xl border border-stone-200 shadow-2xs space-y-3"
-                      >
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          <div>
-                            <label className="block text-[11px] font-semibold text-stone-600 mb-0.5">
-                              Branch Name
-                            </label>
-                            <input
-                              type="text"
-                              value={branch.name}
-                              onChange={(e) => {
-                                const updated = [...tempBranches];
-                                updated[idx] = { ...updated[idx], name: e.target.value };
-                                setTempBranches(updated);
-                              }}
-                              className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-lg font-semibold"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[11px] font-semibold text-stone-600 mb-0.5">
-                              Subtitle / Role
-                            </label>
-                            <input
-                              type="text"
-                              value={branch.subtitle}
-                              onChange={(e) => {
-                                const updated = [...tempBranches];
-                                updated[idx] = { ...updated[idx], subtitle: e.target.value };
-                                setTempBranches(updated);
-                              }}
-                              className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-lg"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-semibold text-stone-600 mb-0.5">
-                            Street Address
-                          </label>
-                          <input
-                            type="text"
-                            value={branch.address}
-                            onChange={(e) => {
-                              const updated = [...tempBranches];
-                              updated[idx] = { ...updated[idx], address: e.target.value };
-                              setTempBranches(updated);
-                            }}
-                            className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-lg"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                          <div>
-                            <label className="block text-[11px] font-semibold text-stone-600 mb-0.5">
-                              Phone / WhatsApp
-                            </label>
-                            <input
-                              type="text"
-                              value={branch.phone}
-                              onChange={(e) => {
-                                const updated = [...tempBranches];
-                                updated[idx] = { ...updated[idx], phone: e.target.value };
-                                setTempBranches(updated);
-                              }}
-                              className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-lg"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-stone-600 mb-0.5">
-                              Capacity Badge
-                            </label>
-                            <input
-                              type="text"
-                              value={branch.capacityText}
-                              onChange={(e) => {
-                                const updated = [...tempBranches];
-                                updated[idx] = { ...updated[idx], capacityText: e.target.value };
-                                setTempBranches(updated);
-                              }}
-                              className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-lg"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-stone-600 mb-0.5">
-                              Focus Area
-                            </label>
-                            <input
-                              type="text"
-                              value={branch.focusArea}
-                              onChange={(e) => {
-                                const updated = [...tempBranches];
-                                updated[idx] = { ...updated[idx], focusArea: e.target.value };
-                                setTempBranches(updated);
-                              }}
-                              className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-lg"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 5: FAQ MANAGEMENT */}
-              {activeTab === 'faq' && (
-                <div className="space-y-4 max-w-3xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-heading font-bold text-sm text-[#352106]">
-                        Frequently Asked Questions (Screenshot 4)
-                      </h3>
-                      <p className="text-xs text-stone-500">
-                        Add, edit, or delete questions and answers shown in the FAQ accordion.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleAddFaq}
-                      className="px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-[#352106] font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add FAQ Item
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {tempFaqs.map((faq, idx) => (
-                      <div
-                        key={faq.id}
-                        className="p-3.5 bg-white rounded-xl border border-stone-200 shadow-2xs space-y-2 relative"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <input
-                            type="text"
-                            value={faq.question}
-                            onChange={(e) => {
-                              const updated = [...tempFaqs];
-                              updated[idx] = { ...updated[idx], question: e.target.value };
-                              setTempFaqs(updated);
-                            }}
-                            className="font-heading font-semibold text-xs text-[#352106] w-full px-2.5 py-1.5 border border-stone-300 rounded-lg"
-                            placeholder="Question"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFaq(faq.id)}
-                            className="p-1.5 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
-                            title="Delete FAQ"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <textarea
-                          rows={2}
-                          value={faq.answer}
-                          onChange={(e) => {
-                            const updated = [...tempFaqs];
-                            updated[idx] = { ...updated[idx], answer: e.target.value };
-                            setTempFaqs(updated);
-                          }}
-                          className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-lg text-stone-700"
-                          placeholder="Answer"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 6: CONTACTS & ANNOUNCEMENT */}
-              {activeTab === 'contact' && (
-                <div className="space-y-4 max-w-2xl">
-                  <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs space-y-3">
-                    <h3 className="font-heading font-bold text-sm text-[#352106]">
-                      Contact Information (Footer & WhatsApp CTA)
-                    </h3>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Primary WhatsApp Phone (Screenshot 5: +62 813-1700-0944)
-                      </label>
-                      <input
-                        type="text"
-                        value={tempSettings.whatsappPhone}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, whatsappPhone: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Contact Email
-                      </label>
-                      <input
-                        type="email"
-                        value={tempSettings.contactEmail}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, contactEmail: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Headquarters Street Address
-                      </label>
-                      <input
-                        type="text"
-                        value={tempSettings.headquartersAddress}
-                        onChange={(e) =>
-                          setTempSettings({ ...tempSettings, headquartersAddress: e.target.value })
-                        }
-                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-heading font-bold text-sm text-[#352106]">
-                        Top Announcement Ribbon
-                      </h3>
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={tempSettings.showAnnouncement}
-                          onChange={(e) =>
-                            setTempSettings({ ...tempSettings, showAnnouncement: e.target.checked })
-                          }
-                          className="rounded text-[#e8a70a]"
-                        />
-                        <span>Visible on site</span>
-                      </label>
-                    </div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Name
+                    </label>
                     <input
                       type="text"
-                      value={tempSettings.announcementText}
-                      onChange={(e) =>
-                        setTempSettings({ ...tempSettings, announcementText: e.target.value })
-                      }
-                      className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
+                      value={fac.name}
+                      onChange={(e) => {
+                        const copy = [...localFacilities];
+                        copy[idx].name = e.target.value;
+                        setLocalFacilities(copy);
+                      }}
+                      className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
                     />
                   </div>
-                </div>
-              )}
 
-              {/* TAB 7: VOLUNTEERS */}
-              {activeTab === 'volunteers' && (
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                    <h3 className="font-heading font-bold text-sm text-[#352106]">
-                      Volunteer Applicants ({filteredVolunteers.length})
-                    </h3>
-                    <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-lg text-xs">
-                      {(['All', 'Pending', 'Contacted', 'Approved'] as const).map((filter) => (
-                        <button
-                          key={filter}
-                          type="button"
-                          onClick={() => setVolunteerFilter(filter)}
-                          className={`px-2.5 py-1 rounded font-medium transition-colors ${
-                            volunteerFilter === filter ? 'bg-white font-bold text-[#352106]' : 'text-stone-600'
-                          }`}
-                        >
-                          {filter}
-                        </button>
-                      ))}
+                  {/* Photo with Thumbnail + Choose File + Remove photo */}
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Photo
+                    </label>
+                    <div className="flex flex-wrap items-center gap-4">
+                      {fac.photo && (
+                        <img
+                          src={fac.photo}
+                          alt={fac.name}
+                          className="w-24 h-18 object-cover rounded-lg border border-stone-200 shadow-2xs"
+                        />
+                      )}
+                      <div className="flex items-center gap-3">
+                        <label className="px-3 py-1.5 border border-stone-300 hover:border-stone-400 bg-white text-stone-700 text-xs rounded-lg cursor-pointer transition-colors shadow-2xs">
+                          <span>Choose File</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) =>
+                              handlePhotoUpload(e, (url) => {
+                                const copy = [...localFacilities];
+                                copy[idx].photo = url;
+                                setLocalFacilities(copy);
+                              })
+                            }
+                          />
+                        </label>
+                        {fac.photo && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copy = [...localFacilities];
+                              copy[idx].photo = '';
+                              setLocalFacilities(copy);
+                            }}
+                            className="text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
+                          >
+                            Remove photo
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2.5">
-                    {filteredVolunteers.map((app) => (
-                      <div key={app.id} className="p-3 bg-white rounded-xl border border-stone-200 text-xs space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="font-bold text-[#352106] text-sm mr-2">{app.fullName}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 font-mono">{app.id}</span>
-                            <span className="text-stone-500 ml-2">({app.institution})</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
+                  {/* Description */}
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={fac.description}
+                      onChange={(e) => {
+                        const copy = [...localFacilities];
+                        copy[idx].description = e.target.value;
+                        setLocalFacilities(copy);
+                      }}
+                      className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                    />
+                  </div>
+
+                  {/* Order & Buttons */}
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="w-28">
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Order
+                      </label>
+                      <input
+                        type="number"
+                        value={fac.order ?? 0}
+                        onChange={(e) => {
+                          const copy = [...localFacilities];
+                          copy[idx].order = parseInt(e.target.value) || 0;
+                          setLocalFacilities(copy);
+                        }}
+                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFacility(fac.id)}
+                        className="px-3.5 py-2 border border-stone-300 hover:bg-stone-50 text-stone-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSaveFacility(idx)}
+                        className="px-4 py-2 bg-[#e8a70a] hover:bg-[#f1b607] text-[#241708] text-xs font-heading font-bold rounded-lg flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 2: ACTIVITIES (Screenshot 2)                                   */}
+          {/* ================================================================= */}
+          {activeTab === 'activities' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-stone-600">
+                  Manage weekly and daily routines of children across homes (devotion, study, arts).
+                </p>
+                <button
+                  onClick={handleAddActivity}
+                  className="px-3.5 py-1.5 bg-stone-800 hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Activity</span>
+                </button>
+              </div>
+
+              {localActivities.map((act, idx) => (
+                <div
+                  key={act.id}
+                  className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs space-y-4"
+                >
+                  {/* Title & Schedule in 2 columns */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Title
+                      </label>
+                      <input
+                        type="text"
+                        value={act.title}
+                        onChange={(e) => {
+                          const copy = [...localActivities];
+                          copy[idx].title = e.target.value;
+                          setLocalActivities(copy);
+                        }}
+                        className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Schedule
+                      </label>
+                      <input
+                        type="text"
+                        value={act.schedule}
+                        onChange={(e) => {
+                          const copy = [...localActivities];
+                          copy[idx].schedule = e.target.value;
+                          setLocalActivities(copy);
+                        }}
+                        className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Photo */}
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Photo
+                    </label>
+                    <div className="flex flex-wrap items-center gap-4">
+                      {act.photo && (
+                        <img
+                          src={act.photo}
+                          alt={act.title}
+                          className="w-24 h-18 object-cover rounded-lg border border-stone-200 shadow-2xs"
+                        />
+                      )}
+                      <div className="flex items-center gap-3">
+                        <label className="px-3 py-1.5 border border-stone-300 hover:border-stone-400 bg-white text-stone-700 text-xs rounded-lg cursor-pointer transition-colors shadow-2xs">
+                          <span>Choose File</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) =>
+                              handlePhotoUpload(e, (url) => {
+                                const copy = [...localActivities];
+                                copy[idx].photo = url;
+                                setLocalActivities(copy);
+                              })
+                            }
+                          />
+                        </label>
+                        {act.photo && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copy = [...localActivities];
+                              copy[idx].photo = '';
+                              setLocalActivities(copy);
+                            }}
+                            className="text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
+                          >
+                            Remove photo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={act.description}
+                      onChange={(e) => {
+                        const copy = [...localActivities];
+                        copy[idx].description = e.target.value;
+                        setLocalActivities(copy);
+                      }}
+                      className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                    />
+                  </div>
+
+                  {/* Order & Buttons */}
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="w-28">
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Order
+                      </label>
+                      <input
+                        type="number"
+                        value={act.order ?? 0}
+                        onChange={(e) => {
+                          const copy = [...localActivities];
+                          copy[idx].order = parseInt(e.target.value) || 0;
+                          setLocalActivities(copy);
+                        }}
+                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteActivity(act.id)}
+                        className="px-3.5 py-2 border border-stone-300 hover:bg-stone-50 text-stone-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSaveActivity(idx)}
+                        className="px-4 py-2 bg-[#e8a70a] hover:bg-[#f1b607] text-[#241708] text-xs font-heading font-bold rounded-lg flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 3: HOMES (Screenshot 3)                                       */}
+          {/* ================================================================= */}
+          {activeTab === 'homes' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-stone-500 italic">
+                  Homes marked &quot;Sample&quot; are templates — replace their details and save to remove the sample label.
+                </p>
+                <button
+                  onClick={handleAddHome}
+                  className="px-3.5 py-1.5 bg-stone-800 hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Home</span>
+                </button>
+              </div>
+
+              {localHomes.map((home, idx) => (
+                <div
+                  key={home.id}
+                  className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs space-y-4"
+                >
+                  {/* Name & Contact */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Name {home.isSample && <span className="text-amber-600 font-normal">(Sample)</span>}
+                      </label>
+                      <input
+                        type="text"
+                        value={home.name}
+                        onChange={(e) => {
+                          const copy = [...localHomes];
+                          copy[idx].name = e.target.value;
+                          setLocalHomes(copy);
+                        }}
+                        className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Contact
+                      </label>
+                      <input
+                        type="text"
+                        value={home.contact}
+                        onChange={(e) => {
+                          const copy = [...localHomes];
+                          copy[idx].contact = e.target.value;
+                          setLocalHomes(copy);
+                        }}
+                        className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Location & Google Maps link */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Location / address
+                      </label>
+                      <input
+                        type="text"
+                        value={home.location}
+                        onChange={(e) => {
+                          const copy = [...localHomes];
+                          copy[idx].location = e.target.value;
+                          setLocalHomes(copy);
+                        }}
+                        className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Google Maps link (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={home.mapsLink || ''}
+                        placeholder="https://maps.google.com/..."
+                        onChange={(e) => {
+                          const copy = [...localHomes];
+                          copy[idx].mapsLink = e.target.value;
+                          setLocalHomes(copy);
+                        }}
+                        className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Visit activities & Visiting hours */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Visit activities
+                      </label>
+                      <input
+                        type="text"
+                        value={home.visitActivities}
+                        onChange={(e) => {
+                          const copy = [...localHomes];
+                          copy[idx].visitActivities = e.target.value;
+                          setLocalHomes(copy);
+                        }}
+                        className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Visiting hours
+                      </label>
+                      <input
+                        type="text"
+                        value={home.visitingHours}
+                        onChange={(e) => {
+                          const copy = [...localHomes];
+                          copy[idx].visitingHours = e.target.value;
+                          setLocalHomes(copy);
+                        }}
+                        className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={home.description}
+                      onChange={(e) => {
+                        const copy = [...localHomes];
+                        copy[idx].description = e.target.value;
+                        setLocalHomes(copy);
+                      }}
+                      className="w-full px-3.5 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607]"
+                    />
+                  </div>
+
+                  {/* Logo & Photo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Logo
+                      </label>
+                      <div className="flex items-center gap-3">
+                        {home.logo && (
+                          <img
+                            src={home.logo}
+                            alt="Logo"
+                            className="w-16 h-16 object-contain border border-stone-200 rounded-lg p-1 bg-white"
+                          />
+                        )}
+                        <label className="px-3 py-1.5 border border-stone-300 hover:border-stone-400 bg-white text-stone-700 text-xs rounded-lg cursor-pointer">
+                          <span>Choose File</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) =>
+                              handlePhotoUpload(e, (url) => {
+                                const copy = [...localHomes];
+                                copy[idx].logo = url;
+                                setLocalHomes(copy);
+                              })
+                            }
+                          />
+                        </label>
+                        {home.logo && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copy = [...localHomes];
+                              copy[idx].logo = '';
+                              setLocalHomes(copy);
+                            }}
+                            className="text-xs text-stone-500 hover:text-stone-800"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Photo
+                      </label>
+                      <div className="flex items-center gap-3">
+                        {home.photo && (
+                          <img
+                            src={home.photo}
+                            alt="Photo"
+                            className="w-20 h-16 object-cover border border-stone-200 rounded-lg"
+                          />
+                        )}
+                        <label className="px-3 py-1.5 border border-stone-300 hover:border-stone-400 bg-white text-stone-700 text-xs rounded-lg cursor-pointer">
+                          <span>Choose File</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) =>
+                              handlePhotoUpload(e, (url) => {
+                                const copy = [...localHomes];
+                                copy[idx].photo = url;
+                                setLocalHomes(copy);
+                              })
+                            }
+                          />
+                        </label>
+                        {home.photo && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copy = [...localHomes];
+                              copy[idx].photo = '';
+                              setLocalHomes(copy);
+                            }}
+                            className="text-xs text-stone-500 hover:text-stone-800"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order & Buttons */}
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="w-28">
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Order
+                      </label>
+                      <input
+                        type="number"
+                        value={home.order ?? 1}
+                        onChange={(e) => {
+                          const copy = [...localHomes];
+                          copy[idx].order = parseInt(e.target.value) || 1;
+                          setLocalHomes(copy);
+                        }}
+                        className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteHome(home.id)}
+                        className="px-3.5 py-2 border border-stone-300 hover:bg-stone-50 text-stone-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSaveHome(idx)}
+                        className="px-4 py-2 bg-[#e8a70a] hover:bg-[#f1b607] text-[#241708] text-xs font-heading font-bold rounded-lg flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 4: OLD WHATSAPP PLEDGES (Screenshot 4)                        */}
+          {/* ================================================================= */}
+          {activeTab === 'pledges' && (
+            <div className="space-y-6">
+              <p className="text-xs text-stone-600">
+                These are amounts people chose before opening WhatsApp. Please confirm actual transfers in WhatsApp or your bank.
+              </p>
+
+              {/* Total Pledged Card */}
+              <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs">
+                <span className="text-xs text-stone-500 font-medium">
+                  Total pledged ({whatsappPledges.length})
+                </span>
+                <div className="text-4xl font-extrabold text-[#352106] mt-1 font-heading">
+                  Rp {totalPledged.toLocaleString('id-ID')}
+                </div>
+              </div>
+
+              {/* Pledges Table */}
+              <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAF7F2] border-b border-stone-200 text-stone-700 font-semibold">
+                    <tr>
+                      <th className="px-6 py-3.5">Amount</th>
+                      <th className="px-6 py-3.5">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {whatsappPledges.length === 0 ? (
+                      <tr>
+                        <td colSpan={2} className="px-6 py-8 text-center text-stone-500 italic">
+                          No WhatsApp pledges recorded yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      whatsappPledges.map((p) => (
+                        <tr key={p.id} className="hover:bg-stone-50/60 transition-colors">
+                          <td className="px-6 py-4 font-bold text-[#352106]">
+                            Rp {p.amount.toLocaleString('id-ID')}
+                          </td>
+                          <td className="px-6 py-4 text-stone-600">{p.date}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 5: VISITS (Screenshot 5)                                      */}
+          {/* ================================================================= */}
+          {activeTab === 'visits' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-stone-600">
+                  Track scheduled visits from donors, volunteers, and benefactors visiting the homes.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-stone-200 overflow-x-auto shadow-xs">
+                <table className="w-full text-left text-xs min-w-[700px]">
+                  <thead className="bg-[#FAF7F2] border-b border-stone-200 text-stone-700 font-semibold">
+                    <tr>
+                      <th className="px-4 py-3.5">ID</th>
+                      <th className="px-4 py-3.5">Visitor</th>
+                      <th className="px-4 py-3.5">Contact</th>
+                      <th className="px-4 py-3.5">Home</th>
+                      <th className="px-4 py-3.5">Date</th>
+                      <th className="px-4 py-3.5">People</th>
+                      <th className="px-4 py-3.5">Notes</th>
+                      <th className="px-4 py-3.5">Received</th>
+                      <th className="px-4 py-3.5 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {visits.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-6 py-8 text-center text-stone-500 italic">
+                          No visits booked yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      visits.map((v) => (
+                        <tr key={v.id} className="hover:bg-stone-50/60 transition-colors">
+                          <td className="px-4 py-3 font-mono text-[11px] text-stone-500">{v.id}</td>
+                          <td className="px-4 py-3 font-bold text-[#352106]">{v.visitor}</td>
+                          <td className="px-4 py-3 text-stone-600">{v.contact}</td>
+                          <td className="px-4 py-3 text-stone-800 font-medium">{v.home}</td>
+                          <td className="px-4 py-3 text-stone-600">{v.date}</td>
+                          <td className="px-4 py-3 text-center text-stone-700">{v.people}</td>
+                          <td className="px-4 py-3 text-stone-500 italic">{v.notes || '-'}</td>
+                          <td className="px-4 py-3 text-[11px] text-stone-500">{v.received}</td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => handleDeleteVisit(v.id)}
+                              className="p-1.5 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Delete visit"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 6: VOLUNTEERS                                                 */}
+          {/* ================================================================= */}
+          {activeTab === 'volunteers' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <p className="text-xs text-stone-600">
+                  Applicants registered via the public volunteer form.
+                </p>
+                <div className="flex items-center gap-1.5">
+                  {(['All', 'Pending', 'Contacted', 'Approved'] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setVolunteerFilter(filter)}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                        volunteerFilter === filter
+                          ? 'bg-[#352106] text-[#f1b607]'
+                          : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-50'
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-stone-200 overflow-x-auto shadow-xs">
+                <table className="w-full text-left text-xs min-w-[700px]">
+                  <thead className="bg-[#FAF7F2] border-b border-stone-200 text-stone-700 font-semibold">
+                    <tr>
+                      <th className="px-4 py-3.5">Name</th>
+                      <th className="px-4 py-3.5">Phone / Email</th>
+                      <th className="px-4 py-3.5">Branch</th>
+                      <th className="px-4 py-3.5">Role</th>
+                      <th className="px-4 py-3.5">Status</th>
+                      <th className="px-4 py-3.5 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {volunteers
+                      .filter((v) => volunteerFilter === 'All' || v.status === volunteerFilter)
+                      .map((v) => (
+                        <tr key={v.id} className="hover:bg-stone-50/60 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="font-bold text-[#352106]">{v.fullName}</div>
+                            <div className="text-[11px] text-stone-500">{v.institution}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-stone-800">{v.phone}</div>
+                            <div className="text-[11px] text-stone-500">{v.email}</div>
+                          </td>
+                          <td className="px-4 py-3 text-stone-700">{v.preferredBranchName}</td>
+                          <td className="px-4 py-3 text-stone-700 font-medium">{v.role}</td>
+                          <td className="px-4 py-3">
                             <select
-                              value={app.status}
-                              onChange={(e) => handleUpdateVolunteerStatus(app.id, e.target.value as any)}
-                              className="text-[11px] border border-stone-300 rounded px-1.5 py-0.5 bg-stone-50"
+                              value={v.status}
+                              onChange={async (e) => {
+                                const newStat = e.target.value as any;
+                                const updated = volunteers.map((x) =>
+                                  x.id === v.id ? { ...x, status: newStat } : x
+                                );
+                                onUpdateVolunteers(updated);
+                                if (isSupabaseConfigured) {
+                                  await updateVolunteerStatus(v.id, newStat);
+                                }
+                                showToast(`Volunteer status updated to ${newStat}`);
+                              }}
+                              className="text-[11px] font-semibold px-2.5 py-1 rounded-md border border-stone-300 bg-white"
                             >
                               <option value="Pending">Pending</option>
                               <option value="Contacted">Contacted</option>
                               <option value="Approved">Approved</option>
                             </select>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteVolunteer(app.id)}
-                              className="text-stone-400 hover:text-rose-600 p-1"
-                              title="Delete"
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <a
+                              href={`https://wa.me/${v.phone.replace(/[^0-9]/g, '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg inline-flex items-center"
+                              title="Chat WhatsApp"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="text-stone-600 text-[11px] flex flex-wrap gap-x-4">
-                          <span>Role: <strong>{app.role}</strong></span>
-                          <span>Branch: <strong>{app.preferredBranchName}</strong></span>
-                          <span>Availability: <strong>{app.availability}</strong></span>
-                          <span>Phone: <strong>{app.phone}</strong></span>
-                        </div>
-                        {app.motivation && (
-                          <p className="italic text-stone-500 bg-stone-50 p-2 rounded text-[11px]">
-                            "{app.motivation}"
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 8: DONATIONS */}
-              {activeTab === 'donations' && (
-                <div className="space-y-4">
-                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex justify-between items-center text-xs">
-                    <div>
-                      <span className="text-stone-500 block text-[11px]">Total Donations:</span>
-                      <span className="font-heading font-bold text-emerald-800 text-base">
-                        Rp {donations.reduce((s, d) => s + (d.amount || 0), 0).toLocaleString('id-ID')}
-                      </span>
-                    </div>
-                    <span className="text-stone-600 font-medium">{donations.length} Contributions logged</span>
-                  </div>
-
-                  <div className="bg-white rounded-xl border border-stone-200 overflow-hidden text-xs">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[11px]">
-                          <tr>
-                            <th className="p-2.5">ID</th>
-                            <th className="p-2.5">Donor</th>
-                            <th className="p-2.5">Program</th>
-                            <th className="p-2.5">Amount</th>
-                            <th className="p-2.5">Method</th>
-                            <th className="p-2.5">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-stone-100">
-                          {donations.map((d) => (
-                            <tr key={d.transactionId} className="hover:bg-stone-50/50">
-                              <td className="p-2.5 font-mono text-[10px] text-stone-500">{d.transactionId}</td>
-                              <td className="p-2.5 font-semibold text-[#352106]">{d.isAnonymous ? 'Anonymous' : d.donorName}</td>
-                              <td className="p-2.5 text-stone-600 truncate max-w-xs">{d.programTitle}</td>
-                              <td className="p-2.5 font-bold text-emerald-700">Rp {d.amount.toLocaleString('id-ID')}</td>
-                              <td className="p-2.5 text-stone-500 text-[11px]">{d.paymentMethod}</td>
-                              <td className="p-2.5">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleDonation(d.transactionId)}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
-                                    d.status === 'Verified' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                                  }`}
-                                >
-                                  {d.status}
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            </div>
-
-            {/* Bottom Actions Bar */}
-            <div className="p-4 bg-white border-t border-stone-200 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={handleResetDefaults}
-                className="px-3.5 py-2 text-xs text-stone-600 hover:bg-stone-100 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-stone-400" />
-                <span>Reset to Default</span>
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 border border-stone-300 text-xs font-medium text-stone-700 hover:bg-stone-50 rounded-lg transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAll}
-                  className="px-5 py-2 bg-[#e8a70a] hover:bg-[#f1b607] text-[#241708] font-heading font-bold text-xs rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Save All Changes</span>
-                </button>
+                              <MessageCircle className="w-4 h-4" />
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             </div>
+          )}
 
-          </div>
-        )}
-      </div>
+          {/* ================================================================= */}
+          {/* TAB 7: DONATIONS                                                  */}
+          {/* ================================================================= */}
+          {activeTab === 'donations' && (
+            <div className="space-y-6">
+              <p className="text-xs text-stone-600">
+                Official donations recorded through online QRIS and Bank Transfers.
+              </p>
+
+              <div className="bg-white rounded-2xl border border-stone-200 overflow-x-auto shadow-xs">
+                <table className="w-full text-left text-xs min-w-[700px]">
+                  <thead className="bg-[#FAF7F2] border-b border-stone-200 text-stone-700 font-semibold">
+                    <tr>
+                      <th className="px-4 py-3.5">Transaction ID</th>
+                      <th className="px-4 py-3.5">Donor</th>
+                      <th className="px-4 py-3.5">Program</th>
+                      <th className="px-4 py-3.5">Amount</th>
+                      <th className="px-4 py-3.5">Payment</th>
+                      <th className="px-4 py-3.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {donations.map((d) => (
+                      <tr key={d.transactionId} className="hover:bg-stone-50/60 transition-colors">
+                        <td className="px-4 py-3 font-mono text-[11px] text-stone-500">{d.transactionId}</td>
+                        <td className="px-4 py-3 font-bold text-[#352106]">{d.donorName}</td>
+                        <td className="px-4 py-3 text-stone-700">{d.programTitle}</td>
+                        <td className="px-4 py-3 font-bold text-amber-700">Rp {d.amount.toLocaleString('id-ID')}</td>
+                        <td className="px-4 py-3 text-stone-600">{d.paymentMethod}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={async () => {
+                              const newStat: 'Verified' | 'Pending' = d.status === 'Verified' ? 'Pending' : 'Verified';
+                              const updated = donations.map((x) =>
+                                x.transactionId === d.transactionId ? { ...x, status: newStat } : x
+                              );
+                              onUpdateDonations(updated);
+                              if (isSupabaseConfigured) {
+                                await updateDonationStatus(d.transactionId, newStat);
+                              }
+                              showToast(`Donation marked as ${newStat}`);
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer ${
+                              d.status === 'Verified'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {d.status}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

@@ -7,6 +7,11 @@ import {
   VolunteerApplication,
   DonationRecord,
   BankAccount,
+  Facility,
+  Activity,
+  Home,
+  VisitBooking,
+  WhatsAppPledge,
 } from '../types';
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -382,5 +387,108 @@ export const INITIAL_DONATIONS: DonationRecord[] = [
     isAnonymous: false,
     timestamp: '2026-10-22T07:15:00Z',
     status: 'Verified',
+  },
+];
+
+export const DEFAULT_FACILITIES: Facility[] = [
+  {
+    id: 'fac-1',
+    name: 'Hall',
+    photo: '/images/hero_orphanage_hope_1790578628387.jpg',
+    description: 'A shared hall so they can communicate with love.',
+    order: 0,
+  },
+  {
+    id: 'fac-2',
+    name: 'Study & Computer Room',
+    photo: '/images/children_education_art_1790578654362.jpg',
+    description: 'Air-conditioned learning space equipped with study desks, books, and internet-connected laptops.',
+    order: 1,
+  },
+  {
+    id: 'fac-3',
+    name: 'Children Dormitory',
+    photo: '/images/adoption_family_love_1790578641380.jpg',
+    description: 'Clean, safe, and comfortable sleeping quarters for resident children with 24/7 foster guardian supervision.',
+    order: 2,
+  },
+];
+
+export const DEFAULT_ACTIVITIES: Activity[] = [
+  {
+    id: 'act-1',
+    title: 'Morning Devotion',
+    schedule: 'Every day',
+    photo: '/images/caregiver_nutrition_care_1790578667798.jpg',
+    description: 'Starting the day together with prayer and reflection.',
+    order: 0,
+  },
+  {
+    id: 'act-2',
+    title: 'Afternoon Mentoring & Homework',
+    schedule: 'Mon - Fri, 15:30 - 17:30 WIB',
+    photo: '/images/children_education_art_1790578654362.jpg',
+    description: 'One-on-one academic tutoring and homework assistance with volunteer university students.',
+    order: 1,
+  },
+  {
+    id: 'act-3',
+    title: 'Creative Arts & Music Workshop',
+    schedule: 'Every Saturday, 09:00 - 12:00 WIB',
+    photo: '/images/hero_orphanage_hope_1790578628387.jpg',
+    description: 'Fostering talent through drawing, choir singing, musical instruments, and speech performance.',
+    order: 2,
+  },
+];
+
+export const DEFAULT_HOMES: Home[] = [
+  {
+    id: 'home-1',
+    name: 'Rumah Bersinar',
+    contact: '+62 813-1700-0944',
+    location: 'JL. NGINDEN SEMOLO 42, SURABAYA',
+    mapsLink: 'https://maps.google.com/?q=Jl.+Nginden+Semolo+42+Surabaya',
+    visitActivities: 'Reading together, games, shared meals',
+    visitingHours: 'Saturday, 10:00 – 15:00 WIB',
+    description: 'Rumah Bersinar is a welcoming and caring home dedicated to providing a safe, supportive, and nurturing environtment for childern. Through educational activities, reading sessions, games and shared meals. We aim to support childern\'s growth, learning and happiness. We welcome donors and volunteers who want to share their time, care, and resources to make a positive difference in the childern\'s lives.',
+    logo: '/images/caregiver_nutrition_care_1790578667798.jpg',
+    photo: '/images/hero_orphanage_hope_1790578628387.jpg',
+    order: 1,
+    isSample: true,
+  },
+  {
+    id: 'home-2',
+    name: 'Panti Asuhan Saluran Kasih',
+    contact: '+62 31 892 4567',
+    location: 'Kerawean, Sumorame, Candi District, Sidoarjo Regency, East Java',
+    mapsLink: 'https://maps.google.com/?q=Sumorame+Candi+Sidoarjo',
+    visitActivities: 'Vocational workshops, computer training, sports',
+    visitingHours: 'Sunday, 13:00 – 17:00 WIB',
+    description: 'Vocational training, digital literacy, sports & talent incubation center for adolescent children.',
+    logo: '/images/children_education_art_1790578654362.jpg',
+    photo: '/images/adoption_family_love_1790578641380.jpg',
+    order: 2,
+    isSample: false,
+  },
+];
+
+export const DEFAULT_VISITS: VisitBooking[] = [
+  {
+    id: 'VIS-00001',
+    visitor: 'Test Visitor',
+    contact: '081234567890',
+    home: 'Rumah Bersinar — Home 1 (Sample)',
+    date: '2030-01-05',
+    people: 1,
+    notes: '',
+    received: '18 Oct 2026, 14:56:45 WIB',
+  },
+];
+
+export const DEFAULT_WHATSAPP_PLEDGES: WhatsAppPledge[] = [
+  {
+    id: 'wp-1',
+    amount: 100000,
+    date: '19 Oct 2026, 14:32',
   },
 ];
