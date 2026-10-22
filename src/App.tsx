@@ -71,7 +71,7 @@ const STORAGE_KEY_VOLUNTEERS = 'rumah_bersinar_volunteers_v3';
 const STORAGE_KEY_DONATIONS = 'rumah_bersinar_donations_v3';
 const STORAGE_KEY_FACILITIES = 'rumah_bersinar_facilities_v1';
 const STORAGE_KEY_ACTIVITIES = 'rumah_bersinar_activities_v1';
-const STORAGE_KEY_HOMES = 'rumah_bersinar_homes_v1';
+const STORAGE_KEY_HOMES = 'rumah_bersinar_homes_v2';
 const STORAGE_KEY_VISITS = 'rumah_bersinar_visits_v1';
 const STORAGE_KEY_PLEDGES = 'rumah_bersinar_pledges_v1';
 

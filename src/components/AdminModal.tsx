@@ -46,6 +46,7 @@ import {
   saveFacilities,
   saveActivities,
   saveHomes,
+  deleteHome,
   deleteVisit,
   insertVisit,
   updateVolunteerStatus,
@@ -393,7 +394,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       setLocalHomes(updated);
       onUpdateHomes(updated);
       if (isSupabaseConfigured) {
-        await saveHomes(updated);
+        await deleteHome(id);
       }
       showToast('Home deleted');
     }

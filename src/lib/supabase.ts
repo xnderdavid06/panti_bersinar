@@ -576,6 +576,47 @@ export async function getHomes(): Promise<Home[]> {
       return DEFAULT_HOMES;
     }
 
+    // Auto-seed missing homes or upgrade old template data to the 4 real homes
+    const needsMigration = data.length < DEFAULT_HOMES.length || data.some((d: any) => d.name === 'Panti Asuhan Saluran Kasih');
+    if (needsMigration) {
+      const seedRows = DEFAULT_HOMES.map((h, idx) => ({
+        id: h.id,
+        name: h.name,
+        contact: h.contact,
+        location: h.location,
+        maps_link: h.mapsLink || '',
+        visit_activities: h.visitActivities,
+        visiting_hours: h.visitingHours,
+        description: h.description,
+        logo: h.logo || '',
+        photo: h.photo || '',
+        sort_order: h.order ?? idx,
+        is_sample: h.isSample || false,
+      }));
+      await supabase.from('homes').upsert(seedRows);
+
+      const { data: refreshed } = await supabase
+        .from('homes')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (refreshed && refreshed.length > 0) {
+        return refreshed.map((h) => ({
+          id: h.id,
+          name: h.name,
+          contact: h.contact,
+          location: h.location,
+          mapsLink: h.maps_link,
+          visitActivities: h.visit_activities,
+          visitingHours: h.visiting_hours,
+          description: h.description,
+          logo: h.logo,
+          photo: h.photo,
+          order: h.sort_order ?? 0,
+          isSample: h.is_sample,
+        }));
+      }
+    }
+
     return data.map((h) => ({
       id: h.id,
       name: h.name,
@@ -619,6 +660,17 @@ export async function saveHomes(homes: Home[]): Promise<boolean> {
     return !error;
   } catch (e) {
     console.error('Error saving homes to Supabase:', e);
+    return false;
+  }
+}
+
+export async function deleteHome(id: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('homes').delete().eq('id', id);
+    return !error;
+  } catch (e) {
+    console.error('Error deleting home in Supabase:', e);
     return false;
   }
 }
