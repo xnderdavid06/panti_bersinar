@@ -13,7 +13,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   heroLabel: 'A PLACE TO BELONG',
   tagline: 'A home to grow. A community to belong.',
   subheadline: 'Every child deserves a place to learn, grow, and feel at home.',
-  heroImageUrl: '/src/assets/images/hero_orphanage_hope_1790578628387.jpg',
+  heroImageUrl: '/images/hero_orphanage_hope_1790578628387.jpg',
 
   storyHeadline: 'A brighter future begins with belonging.',
   storyParagraph1:
@@ -141,7 +141,7 @@ export const PANTI_BRANCHES: PantiBranch[] = [
     accentColor: '#f1b607',
     bgBadge: 'bg-amber-100 text-[#352106]',
     mapQuery: 'Jl.+Nginden+Semolo+42+Surabaya',
-    imageUrl: '/src/assets/images/hero_orphanage_hope_1790578628387.jpg',
+    imageUrl: '/images/hero_orphanage_hope_1790578628387.jpg',
   },
   {
     id: 'branch-tuhan-baik',
@@ -156,7 +156,7 @@ export const PANTI_BRANCHES: PantiBranch[] = [
     accentColor: '#1d4ed8',
     bgBadge: 'bg-blue-100 text-blue-900',
     mapQuery: 'Jl.+Bratang+Binangun+Gubeng+Surabaya',
-    imageUrl: '/src/assets/images/adoption_family_love_1790578641380.jpg',
+    imageUrl: '/images/adoption_family_love_1790578641380.jpg',
   },
   {
     id: 'branch-saluran-berkat',
@@ -171,7 +171,7 @@ export const PANTI_BRANCHES: PantiBranch[] = [
     accentColor: '#f35722',
     bgBadge: 'bg-rose-100 text-rose-900',
     mapQuery: 'Jl.+Nginden+VI+B+No+19+Sukolilo+Surabaya',
-    imageUrl: '/src/assets/images/caregiver_nutrition_care_1790578667798.jpg',
+    imageUrl: '/images/caregiver_nutrition_care_1790578667798.jpg',
   },
   {
     id: 'branch-saluran-kasih',
@@ -186,7 +186,7 @@ export const PANTI_BRANCHES: PantiBranch[] = [
     accentColor: '#16a34a',
     bgBadge: 'bg-emerald-100 text-emerald-900',
     mapQuery: 'Sumorame+Candi+Sidoarjo',
-    imageUrl: '/src/assets/images/children_education_art_1790578654362.jpg',
+    imageUrl: '/images/children_education_art_1790578654362.jpg',
   },
 ];
 

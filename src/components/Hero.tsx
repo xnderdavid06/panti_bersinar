@@ -16,18 +16,21 @@ export const Hero: React.FC<HeroProps> = ({
   onOpenVolunteer,
   onScrollToStory,
 }) => {
+  const heroImage = (siteSettings.heroImageUrl || '/images/hero_orphanage_hope_1790578628387.jpg')
+    .replace(/^\/src\/assets\/images\//, '/images/');
+
   return (
     <section className="relative min-h-[640px] lg:min-h-[720px] flex items-center justify-start overflow-hidden bg-[#241708]">
       {/* Background Image with warm rich dark overlay matching Screenshot 1 */}
       <div className="absolute inset-0 z-0">
         <img
-          src={siteSettings.heroImageUrl || '/src/assets/images/hero_orphanage_hope_1790578628387.jpg'}
+          src={heroImage}
           alt="Children studying attentively at wooden table in orphanage"
-          className="w-full h-full object-cover object-center filter brightness-[0.55] contrast-[1.05]"
+          className="w-full h-full object-cover object-center filter brightness-[0.70] contrast-[1.05]"
         />
-        {/* Warm Vignette Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#241708]/95 via-[#241708]/75 to-[#241708]/40" />
-        <div className="absolute inset-0 bg-radial-at-c from-transparent via-[#241708]/40 to-[#241708]/90" />
+        {/* Warm Vignette Overlay matching screenshot: dark on left for text, transparent on right for children */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#241708]/95 via-[#241708]/75 md:via-[#241708]/55 to-[#241708]/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#241708]/90 via-transparent to-[#241708]/40" />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28 w-full">

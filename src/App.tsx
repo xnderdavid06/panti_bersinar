@@ -43,7 +43,13 @@ export default function App() {
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: SiteSettings = JSON.parse(saved);
+        if (parsed.heroImageUrl) {
+          parsed.heroImageUrl = parsed.heroImageUrl.replace(/^\/src\/assets\/images\//, '/images/');
+        }
+        return parsed;
+      }
     } catch (e) {
       console.error('Error loading settings from localStorage', e);
     }
@@ -54,7 +60,13 @@ export default function App() {
   const [branches, setBranches] = useState<PantiBranch[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_BRANCHES);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: PantiBranch[] = JSON.parse(saved);
+        return parsed.map((b) => ({
+          ...b,
+          imageUrl: b.imageUrl ? b.imageUrl.replace(/^\/src\/assets\/images\//, '/images/') : b.imageUrl,
+        }));
+      }
     } catch (e) {
       console.error('Error loading branches from localStorage', e);
     }

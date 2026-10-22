@@ -54,10 +54,10 @@ interface AdminModalProps {
 }
 
 const PHOTO_PRESETS = [
-  { label: 'Children Study Table', url: '/src/assets/images/hero_orphanage_hope_1790578628387.jpg' },
-  { label: 'Caregiver & Toddler Nutrition', url: '/src/assets/images/caregiver_nutrition_care_1790578667798.jpg' },
-  { label: 'Children Arts & Education', url: '/src/assets/images/children_education_art_1790578654362.jpg' },
-  { label: 'Foster Family & Love', url: '/src/assets/images/adoption_family_love_1790578641380.jpg' },
+  { label: 'Children Study Table', url: '/images/hero_orphanage_hope_1790578628387.jpg' },
+  { label: 'Caregiver & Toddler Nutrition', url: '/images/caregiver_nutrition_care_1790578667798.jpg' },
+  { label: 'Children Arts & Education', url: '/images/children_education_art_1790578654362.jpg' },
+  { label: 'Foster Family & Love', url: '/images/adoption_family_love_1790578641380.jpg' },
 ];
 
 export const AdminModal: React.FC<AdminModalProps> = ({
