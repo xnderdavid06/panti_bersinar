@@ -18,7 +18,6 @@ import {
   Plus,
   Trash2,
   ExternalLink,
-  Sparkles,
   Layers,
 } from 'lucide-react';
 import {
@@ -116,13 +115,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     } else {
       setAuthError(true);
     }
-  };
-
-  const handleQuickDemoFill = () => {
-    setUsernameInput('admin@rumahbersinar.org');
-    setPasswordInput('admin123');
-    setIsAuthenticated(true);
-    setAuthError(false);
   };
 
   // Image Upload helper using FileReader to base64
@@ -294,7 +286,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <input
                     type="password"
                     required
-                    placeholder="Enter password (e.g. admin123)"
+                    placeholder="Enter password"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white"
@@ -302,7 +294,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 </div>
                 {authError && (
                   <p className="text-xs text-rose-600 mt-1.5">
-                    Invalid credentials. Tip: use <strong>admin@rumahbersinar.org</strong> & <strong>admin123</strong>, or click the quick demo button below.
+                    Username atau password salah. Silakan coba lagi.
                   </p>
                 )}
               </div>
@@ -314,17 +306,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 Sign In to Admin
               </button>
             </form>
-
-            <div className="mt-5 pt-4 border-t border-stone-200">
-              <button
-                type="button"
-                onClick={handleQuickDemoFill}
-                className="text-xs text-[#814f34] hover:text-[#352106] font-semibold underline underline-offset-2 flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#f1b607]" />
-                One-Click Quick Demo Login
-              </button>
-            </div>
           </div>
         ) : (
           /* Logged In Dashboard */
