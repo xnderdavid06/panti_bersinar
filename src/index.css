@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  color: #352106;
+  background-color: #FFFDF9;
+}
+
+.font-serif {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+.font-heading {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+}
+
+.font-subheading {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+}
+
+.font-body {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 400;
+}

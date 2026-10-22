@@ -1,0 +1,6 @@
+{
+  "name": "Yayasan Rumah Bersinar",
+  "description": "Website resmi Yayasan Rumah Bersinar (Est. 2019): Bertumbuh dalam Harapan, Bersinar dalam Kehidupan. Menaungi 4 panti asuhan di Surabaya dan Sidoarjo untuk anak-anak prasejahtera dan daerah 3T.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
