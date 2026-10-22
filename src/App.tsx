@@ -30,6 +30,18 @@ import {
   CoreValue,
   FaqItem,
 } from './types';
+import {
+  supabase,
+  isSupabaseConfigured,
+  getSiteSettings,
+  getBranches,
+  getCoreValues,
+  getFaqs,
+  getVolunteers,
+  getDonations,
+  insertVolunteer,
+  insertDonation,
+} from './lib/supabase';
 
 const STORAGE_KEY_SETTINGS = 'rumah_bersinar_site_settings_v3';
 const STORAGE_KEY_BRANCHES = 'rumah_bersinar_branches_v3';
@@ -176,6 +188,77 @@ export default function App() {
     }
   }, [donations]);
 
+  // Initial Supabase Data Fetch & Realtime Listeners
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    let isMounted = true;
+
+    // 1. Initial Load from Supabase Database
+    getSiteSettings().then((s) => isMounted && setSiteSettings(s));
+    getBranches().then((b) => isMounted && setBranches(b));
+    getCoreValues().then((cv) => isMounted && setCoreValues(cv));
+    getFaqs().then((f) => isMounted && setFaqs(f));
+    getVolunteers().then((v) => isMounted && setVolunteers(v));
+    getDonations().then((d) => isMounted && setDonations(d));
+
+    // 2. Realtime WebSocket Subscriptions across tables
+    const channel = supabase
+      .channel('public:db-realtime-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'site_settings' },
+        (payload: any) => {
+          if (payload.new?.settings) {
+            setSiteSettings(payload.new.settings);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'branches' },
+        () => {
+          getBranches().then((b) => isMounted && setBranches(b));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'core_values' },
+        () => {
+          getCoreValues().then((cv) => isMounted && setCoreValues(cv));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'faqs' },
+        () => {
+          getFaqs().then((f) => isMounted && setFaqs(f));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'volunteers' },
+        () => {
+          getVolunteers().then((v) => isMounted && setVolunteers(v));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'donations' },
+        () => {
+          getDonations().then((d) => isMounted && setDonations(d));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      if (supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
   // Handlers
   const handleOpenDonation = (programId?: string, amount?: number) => {
     setSelectedProgramId(programId);
@@ -188,12 +271,18 @@ export default function App() {
     setVolunteerModalOpen(true);
   };
 
-  const handleVolunteerSubmitted = (newApp: VolunteerApplication) => {
+  const handleVolunteerSubmitted = async (newApp: VolunteerApplication) => {
     setVolunteers((prev) => [newApp, ...prev]);
+    if (isSupabaseConfigured) {
+      await insertVolunteer(newApp);
+    }
   };
 
-  const handleDonationSuccess = (record: DonationRecord) => {
+  const handleDonationSuccess = async (record: DonationRecord) => {
     setDonations((prev) => [record, ...prev]);
+    if (isSupabaseConfigured) {
+      await insertDonation(record);
+    }
   };
 
   const handleScrollToStory = () => {

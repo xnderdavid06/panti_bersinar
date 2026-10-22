@@ -35,6 +35,16 @@ import {
   FAQS as DEFAULT_FAQS,
   DONATION_PROGRAMS,
 } from '../data/mockData';
+import {
+  supabase,
+  isSupabaseConfigured,
+  saveSiteSettings,
+  saveBranches,
+  saveCoreValues,
+  saveFaqs,
+  updateVolunteerStatus,
+  updateDonationStatus,
+} from '../lib/supabase';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -78,9 +88,42 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 }) => {
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
-  const [authError, setAuthError] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authSuccessMsg, setAuthSuccessMsg] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+
+  // Check Supabase session on mount
+  React.useEffect(() => {
+    if (!supabase) return;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setIsAuthenticated(true);
+        setCurrentUserEmail(session.user.email || 'Admin');
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setIsAuthenticated(true);
+        setCurrentUserEmail(session.user.email || 'Admin');
+      } else {
+        setIsAuthenticated(false);
+        setCurrentUserEmail(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'photos' | 'content' | 'values' | 'branches' | 'faq' | 'contact' | 'volunteers' | 'donations'>('photos');
@@ -99,22 +142,105 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle Login
-  const handleLogin = (e: React.FormEvent) => {
+  // Handle Login with Supabase / Fallback
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = usernameInput.trim().toLowerCase();
+    setAuthError('');
+    setAuthSuccessMsg('');
+    const email = usernameInput.trim();
     const pass = passwordInput.trim();
 
-    // Accept flexible valid credentials
-    if (
-      (user === 'admin' || user === 'admin@rumahbersinar.org' || user === 'yayasan' || user === 'admin@gmail.com') &&
-      (pass === 'admin123' || pass === 'admin' || pass === 'yayasan2019')
-    ) {
-      setIsAuthenticated(true);
-      setAuthError(false);
+    if (isSupabaseConfigured && supabase) {
+      setAuthLoading(true);
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password: pass,
+        });
+
+        if (error) {
+          // Check local fallback
+          if (
+            (email.toLowerCase() === 'admin' || email.toLowerCase() === 'admin@rumahbersinar.org') &&
+            pass === 'admin123'
+          ) {
+            setIsAuthenticated(true);
+            setCurrentUserEmail('Local Admin (Fallback)');
+          } else {
+            setAuthError(error.message || 'Login gagal. Periksa email dan password.');
+          }
+        } else if (data.user) {
+          setIsAuthenticated(true);
+          setCurrentUserEmail(data.user.email || null);
+        }
+      } catch (err: any) {
+        setAuthError(err?.message || 'Terjadi kesalahan saat login.');
+      } finally {
+        setAuthLoading(false);
+      }
     } else {
-      setAuthError(true);
+      // Offline / Local Mode
+      if (
+        (email.toLowerCase() === 'admin' || email.toLowerCase() === 'admin@rumahbersinar.org' || email.toLowerCase() === 'yayasan') &&
+        (pass === 'admin123' || pass === 'admin' || pass === 'yayasan2019')
+      ) {
+        setIsAuthenticated(true);
+        setCurrentUserEmail('Local Admin');
+      } else {
+        setAuthError('Username atau password salah.');
+      }
     }
+  };
+
+  // Handle Register with Supabase
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthSuccessMsg('');
+    const email = usernameInput.trim();
+    const pass = passwordInput.trim();
+
+    if (!isSupabaseConfigured || !supabase) {
+      setAuthError('Supabase belum dikonfigurasi. Tambahkan VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di Vercel terlebih dahulu.');
+      return;
+    }
+
+    if (pass.length < 6) {
+      setAuthError('Password minimal harus 6 karakter.');
+      return;
+    }
+
+    if (pass !== confirmPassword.trim()) {
+      setAuthError('Konfirmasi password tidak cocok.');
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: pass,
+      });
+
+      if (error) {
+        setAuthError(error.message);
+      } else if (data.user) {
+        setAuthSuccessMsg('Akun Admin berhasil didaftarkan! Jika konfirmasi email aktif di Supabase, silakan cek email Anda, atau langsung Sign In.');
+        setAuthMode('login');
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || 'Registrasi gagal.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    setIsAuthenticated(false);
+    setCurrentUserEmail(null);
   };
 
   // Image Upload helper using FileReader to base64
@@ -135,11 +261,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   };
 
   // Save All Changes
-  const handleSaveAll = () => {
+  const handleSaveAll = async () => {
     onUpdateSettings(tempSettings);
     onUpdateBranches(tempBranches);
     onUpdateCoreValues(tempCoreValues);
     onUpdateFaqs(tempFaqs);
+
+    if (isSupabaseConfigured) {
+      await Promise.all([
+        saveSiteSettings(tempSettings),
+        saveBranches(tempBranches),
+        saveCoreValues(tempCoreValues),
+        saveFaqs(tempFaqs),
+      ]);
+    }
+
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 3000);
   };
@@ -155,6 +291,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       onUpdateBranches(DEFAULT_BRANCHES);
       onUpdateCoreValues(DEFAULT_CORE_VALUES);
       onUpdateFaqs(DEFAULT_FAQS);
+      if (isSupabaseConfigured) {
+        saveSiteSettings(DEFAULT_SITE_SETTINGS);
+        saveBranches(DEFAULT_BRANCHES);
+        saveCoreValues(DEFAULT_CORE_VALUES);
+        saveFaqs(DEFAULT_FAQS);
+      }
       setSaveToast(true);
       setTimeout(() => setSaveToast(false), 3000);
     }
@@ -174,9 +316,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     setTempFaqs(tempFaqs.filter((f) => f.id !== id));
   };
 
-  const handleUpdateVolunteerStatus = (id: string, status: 'Pending' | 'Contacted' | 'Approved') => {
+  const handleUpdateVolunteerStatus = async (id: string, status: 'Pending' | 'Contacted' | 'Approved') => {
     const updated = volunteers.map((v) => (v.id === id ? { ...v, status } : v));
     onUpdateVolunteers(updated);
+    if (isSupabaseConfigured) {
+      await updateVolunteerStatus(id, status);
+    }
   };
 
   const handleDeleteVolunteer = (id: string) => {
@@ -185,13 +330,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     }
   };
 
-  const handleToggleDonation = (txnId: string) => {
+  const handleToggleDonation = async (txnId: string) => {
+    const current = donations.find((d) => d.transactionId === txnId);
+    const newStatus: 'Verified' | 'Pending' = current?.status === 'Verified' ? 'Pending' : 'Verified';
     const updated = donations.map((d) =>
       d.transactionId === txnId
-        ? { ...d, status: (d.status === 'Verified' ? 'Pending' : 'Verified') as 'Verified' | 'Pending' }
+        ? { ...d, status: newStatus }
         : d
     );
     onUpdateDonations(updated);
+    if (isSupabaseConfigured) {
+      await updateDonationStatus(txnId, newStatus);
+    }
   };
 
   const filteredVolunteers = volunteers.filter((v) =>
@@ -215,9 +365,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 </h2>
                 {isAuthenticated && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                    Logged in as Admin
+                    {currentUserEmail ? `Logged in: ${currentUserEmail}` : 'Admin'}
                   </span>
                 )}
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                  isSupabaseConfigured
+                    ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                }`}>
+                  {isSupabaseConfigured ? '🟢 Realtime Supabase' : '⚪ Local Mode'}
+                </span>
               </div>
               <p className="text-[11px] text-amber-200/80">
                 Yayasan Rumah Bersinar · Full Website Customizer
@@ -228,7 +385,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           <div className="flex items-center gap-2">
             {isAuthenticated && (
               <button
-                onClick={() => setIsAuthenticated(false)}
+                onClick={handleLogout}
                 className="text-xs text-stone-300 hover:text-white flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
                 title="Log out"
               >
@@ -246,30 +403,70 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           </div>
         </div>
 
-        {/* Auth Gateway */}
+        {/* Auth Gateway (Login & Register via Supabase) */}
         {!isAuthenticated ? (
           <div className="p-8 sm:p-12 text-center max-w-md mx-auto my-auto w-full">
             <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center text-[#ea580c] mx-auto mb-4 shadow-xs">
               <Lock className="w-7 h-7" />
             </div>
             <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#352106] mb-1">
-              Admin Login
+              {authMode === 'login' ? 'Admin Login' : 'Register Admin Account'}
             </h3>
-            <p className="text-xs text-stone-600 mb-6">
-              Enter your admin email or username and password to edit photos, descriptions, branches, and FAQs.
+            <p className="text-xs text-stone-600 mb-5">
+              {authMode === 'login'
+                ? 'Sign in to customize content, photos, branches, and view realtime donations & volunteer applicants.'
+                : 'Create a new admin account in Supabase to manage Foundation content.'}
             </p>
 
-            <form onSubmit={handleLogin} className="space-y-3.5 text-left">
+            {/* Auth Mode Toggle */}
+            <div className="flex bg-stone-100 p-1 rounded-xl mb-5 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                }}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${
+                  authMode === 'login'
+                    ? 'bg-white text-[#352106] shadow-xs'
+                    : 'text-stone-500 hover:text-[#352106]'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthError('');
+                }}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${
+                  authMode === 'register'
+                    ? 'bg-white text-[#352106] shadow-xs'
+                    : 'text-stone-500 hover:text-[#352106]'
+                }`}
+              >
+                Register
+              </button>
+            </div>
+
+            {authSuccessMsg && (
+              <div className="mb-4 p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs">
+                {authSuccessMsg}
+              </div>
+            )}
+
+            <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="space-y-3.5 text-left">
               <div>
                 <label className="block text-xs font-semibold text-[#352106] mb-1">
-                  Username or Email
+                  Email Address
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
-                    type="text"
+                    type="email"
                     required
-                    placeholder="admin@rumahbersinar.org or admin"
+                    placeholder="admin@rumahbersinar.org"
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white"
@@ -286,24 +483,45 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <input
                     type="password"
                     required
-                    placeholder="Enter password"
+                    placeholder="Enter password (min 6 characters)"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white"
                   />
                 </div>
-                {authError && (
-                  <p className="text-xs text-rose-600 mt-1.5">
-                    Username atau password salah. Silakan coba lagi.
-                  </p>
-                )}
               </div>
+
+              {authMode === 'register' && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#352106] mb-1">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="Re-enter password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f1b607] bg-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {authError && (
+                <p className="text-xs text-rose-600 mt-1.5">
+                  {authError}
+                </p>
+              )}
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-lg font-heading font-bold text-xs bg-[#e8a70a] hover:bg-[#f1b607] text-[#241708] shadow-sm transition-all cursor-pointer"
+                disabled={authLoading}
+                className="w-full py-2.5 rounded-lg font-heading font-bold text-xs bg-[#e8a70a] hover:bg-[#f1b607] text-[#241708] shadow-sm transition-all cursor-pointer disabled:opacity-50"
               >
-                Sign In to Admin
+                {authLoading ? 'Processing...' : authMode === 'login' ? 'Sign In to Admin' : 'Register Admin Account'}
               </button>
             </form>
           </div>
